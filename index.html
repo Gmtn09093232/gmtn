@@ -508,7 +508,7 @@
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.6);
-            -webkit-backdrop-filter: blur(8px); /* Safari/iOS support */
+            -webkit-backdrop-filter: blur(8px);
             backdrop-filter: blur(8px);
             display: flex;
             align-items: center;
@@ -645,6 +645,22 @@
             .prize-number { font-size: 1.8rem; }
             .stake-option { width: 110px; font-size: 1.3rem; padding: 12px 16px; }
         }
+        /* new stake page balance bar */
+        .stake-balance-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #fef3c7;
+            border-radius: 60px;
+            padding: 8px 16px;
+            margin-bottom: 20px;
+            border: 1px solid #fed7aa;
+        }
+        .stake-balance-amount {
+            font-weight: 800;
+            font-size: 1.2rem;
+            color: #ea580c;
+        }
     </style>
 </head>
 <body>
@@ -689,9 +705,21 @@
         </div>
     </div>
 
-    <!-- STAKE PAGE (updated with three stakes) -->
+    <!-- STAKE PAGE (updated with balance and deposit/withdraw buttons) -->
     <div id="stakePage" class="page">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;"><h2 style="font-family:'Inter', monospace; font-weight:800; color:#ea580c;">🎲 ዶት ቢንጎ</h2><div class="players-badge">DOT BINGO</div></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <h2 style="font-family:'Inter', monospace; font-weight:800; color:#ea580c;">🎲 ዶት ቢንጎ</h2>
+            <div class="players-badge">DOT BINGO</div>
+        </div>
+        <!-- new balance bar with deposit/withdraw -->
+        <div class="stake-balance-bar">
+            <span>💰 My Balance</span>
+            <span class="stake-balance-amount" id="stakeBalance">0 ETB</span>
+            <div style="display: flex; gap: 6px;">
+                <button id="stakeDepositBtn" style="background:#f97316; border:none; border-radius:40px; padding:6px 12px; color:white; font-weight:600; font-size:0.7rem;">+Deposit</button>
+                <button id="stakeWithdrawBtn" style="background:#334155; border:none; border-radius:40px; padding:6px 12px; color:white; font-weight:600; font-size:0.7rem;">-Withdraw</button>
+            </div>
+        </div>
         <h3 style="text-align:center; margin:20px 0 10px;">Choose Your Stake</h3>
         <div class="stake-page-buttons">
             <button id="stake10Btn" class="stake-option">10 ETB</button>
@@ -699,6 +727,7 @@
             <button id="stake30Btn" class="stake-option">30 ETB</button>
         </div>
         <div class="rules-text"><p><strong>💰 የመግቢያ ክፍያ፦</strong> 10 / 20 / 30 ብር</p><p><strong>🏆 የሽልማት ገንዘብ፦</strong> 80%</p><p><strong>🎯 ማሸነፍ፦</strong> ረድፍ፣ ዓምድ፣ ዲያግናል ወይም 4 ማዕዘኖች</p><p><strong>⏱️ ይገባኛል ጥያቄ፦</strong> ወዲያው “CLAIM BINGO!”</p></div>
+        <div class="telegram-links" style="margin-top:20px; text-align:center;">📢 Join our community:<br><a href="https://t.me/Dotbingogame" target="_blank">Dot Bingo help</a> | <a href="https://t.me/dotbingo" target="_blank">Dot Bingo channel</a></div>
     </div>
 
     <!-- LOBBY PAGE -->
@@ -752,19 +781,27 @@
         function addGameRecord(win, prize, gameId, cardCount, winnerCount) { 
             totalGames++; 
             if (win) { totalWins++; totalEarned += prize; } 
-            // we need to know the stake used for this game - we can store it in currentGameStake
             recentGames.unshift({ gameId, date: new Date().toLocaleString(), result: win ? 'Win' : 'Lost', stake: currentGameStake || 10, cards: cardCount, prize, winners: winnerCount }); 
             if (recentGames.length > 10) recentGames.pop(); 
             saveStats(); updateStatsUI(); 
         }
 
-        // track current stake
         let currentGameStake = 10;
 
         const lobbyPage = document.getElementById('lobbyPage'), gamePage = document.getElementById('gamePage'), historyPage = document.getElementById('historyPage'), walletPage = document.getElementById('walletPage'), profilePage = document.getElementById('profilePage'), stakePage = document.getElementById('stakePage');
         const lobbyTimerEl = document.getElementById('lobbyTimer'), playersCountEl = document.getElementById('playersCount'), lobbyBalanceEl = document.getElementById('lobbyBalance'), gamePlayersCountEl = document.getElementById('gamePlayersCount'), winningBalanceEl = document.getElementById('winningBalance'), currentCallEl = document.getElementById('currentCall'), calledListEl = document.getElementById('calledList'), selectedNumberEl = document.getElementById('selectedNumber'), numberGrid = document.getElementById('numberGrid'), lobbyCardPreview = document.getElementById('lobbyCardPreview');
-        function syncBalance(v) { currentBalance = v; lobbyBalanceEl.innerText = v; if(document.getElementById('walletBalancePage')) document.getElementById('walletBalancePage').innerText = v; if(document.getElementById('profileBalancePage')) document.getElementById('profileBalancePage').innerText = v; if(document.getElementById('gameBalanceDisplay')) document.getElementById('gameBalanceDisplay').innerText = v; }
+        
+        function syncBalance(v) { 
+            currentBalance = v; 
+            lobbyBalanceEl.innerText = v; 
+            if(document.getElementById('walletBalancePage')) document.getElementById('walletBalancePage').innerText = v; 
+            if(document.getElementById('profileBalancePage')) document.getElementById('profileBalancePage').innerText = v; 
+            if(document.getElementById('gameBalanceDisplay')) document.getElementById('gameBalanceDisplay').innerText = v;
+            if(document.getElementById('stakeBalance')) document.getElementById('stakeBalance').innerText = v + ' ETB';
+        }
+        
         function renderCard(card, containerId, clickable) { const cont = document.getElementById(containerId); if(!cont) return; cont.innerHTML = ''; const table = document.createElement('table'); table.style.borderCollapse='separate'; table.style.borderSpacing='10px'; const thead = document.createElement('thead'); const hr = document.createElement('tr'); ['B','I','N','G','O'].forEach(l=>{let th=document.createElement('th'); th.textContent=l; hr.appendChild(th);}); thead.appendChild(hr); table.appendChild(thead); const tbody = document.createElement('tbody'); for(let r=0;r<5;r++){ const tr=document.createElement('tr'); for(let c=0;c<5;c++){ const val=card[r][c]; const td=document.createElement('td'); td.textContent=val==='FREE'?'★':val; if(val==='FREE') td.classList.add('free'); if(markedNumbers.includes(val)) td.classList.add('marked'); if(clickable && val!=='FREE'){ td.style.cursor='pointer'; td.onclick=()=>{ if(isGameActive && socket) socket.emit('markNumber', val); };} tr.appendChild(td); } tbody.appendChild(tr); } table.appendChild(tbody); cont.appendChild(table); }
+        
         function buildNumberGrid() { numberGrid.innerHTML=''; for(let i=1;i<=100;i++){ const cell=document.createElement('div'); cell.className='grid-cell'; cell.dataset.number=i; cell.textContent=i; if(takenNumbers.has(i)) cell.classList.add('taken'); else cell.onclick=()=>{ if(!isGameActive && socket && !takenNumbers.has(i)) socket.emit('selectCardNumber', i); }; numberGrid.appendChild(cell); } if(selectedCardNumber){ const sel=numberGrid.querySelector(`[data-number='${selectedCardNumber}']`); if(sel) sel.classList.add('selected'); } }
         function updateGridWithTakenNumbers(nums){ takenNumbers=new Set(nums); buildNumberGrid(); }
         function formatCall(n){ let l='B'; if(n>15) l='I'; if(n>30) l='N'; if(n>45) l='G'; if(n>60) l='O'; return `${l}-${n}`; }
@@ -791,15 +828,13 @@
             container.innerHTML = winnersArray.map(w => `<span class="winner-badge">${w}</span>`).join('');
             document.getElementById('winPrize').innerHTML = prize + ' <small>ETB</small>';
             document.getElementById('winnerOverlay').classList.add('active');
-            // enhanced confetti
             const confDiv = document.createElement('div'); confDiv.className = 'confetti';
             for(let i=0;i<120;i++){ let p=document.createElement('div'); p.className='confetti-piece'; p.style.left=Math.random()*100+'%'; p.style.animationDuration=(Math.random()*3+2)+'s'; p.style.backgroundColor=`hsl(${Math.random()*30 + 20}, 90%, 60%)`; p.style.width=Math.random()*8+4+'px'; p.style.height=Math.random()*12+6+'px'; confDiv.appendChild(p); }
             document.body.appendChild(confDiv); setTimeout(()=>confDiv.remove(),4000);
             if(currentGameId) addGameRecord(true, prize, currentGameId, 1, winnersArray.length);
         }
-        async function connect(){ const initData=tg.initData; if(!initData){ alert('Open inside Telegram'); return; } try{ const res=await fetch('/api/telegram-miniapp-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData})}); const data=await res.json(); if(!data.success){ alert('Auth failed'); return; } document.getElementById('profileUsername').innerText=data.username||'Player'; }catch(e){ alert('Network error'); return; } socket=io(); socket.on('connect',()=>{ socket.emit('joinLobby'); }); socket.on('balanceUpdate',syncBalance); socket.on('lobbyState',state=>{ showLobby(state.startsIn); if(state.takenNumbers) updateGridWithTakenNumbers(state.takenNumbers); if(state.playersCount) playersCountEl.innerText=state.playersCount; }); socket.on('yourCard',card=>{ userCard=card; if(isGameActive) renderCard(card,'gameCard',true); else renderCard(card,'lobbyCardPreview',false); }); socket.on('cardTaken',data=>{ updateGridWithTakenNumbers(data.takenNumbers); selectedCardNumber=null; selectedNumberEl.textContent='-'; }); socket.on('playersCount',c=>{ playersCountEl.innerText=c; if(gamePlayersCountEl) gamePlayersCountEl.innerText=c; const prize=Math.floor(c*currentGameStake*0.8); winningBalanceEl.innerText=prize; }); socket.on('gameStarted',data=>{ if(data?.prizePool) winningBalanceEl.innerText=data.prizePool; if(data?.playersCount) gamePlayersCountEl.innerText=data.playersCount; showGame(); currentGameId='GAME_'+Date.now().toString(36).toUpperCase(); }); socket.on('numberCalled',data=>{ currentCallEl.innerText=formatCall(data.number); calledListEl.innerText='Called: '+ (data.calledNumbers||[]).map(n=>formatCall(n)).join(', '); }); socket.on('markedNumbers',nums=>{ markedNumbers=nums; if(isGameActive && userCard.length) renderCard(userCard,'gameCard',true); else if(!isGameActive && userCard.length) renderCard(userCard,'lobbyCardPreview',false); }); socket.on('gameEnded',data=>{ if(data.winningNumber) currentCallEl.innerText=formatCall(data.winningNumber); showWinnerOverlay(data); if(data.noWinner && currentGameId) addGameRecord(false,0,currentGameId,0,0); currentGameId=null; }); socket.on('invalidBingo',()=>alert('❌ Not a valid bingo yet!')); socket.on('depositStatus',data=>alert(data.status==='approved'?`✅ Deposit +${data.amount} ETB approved!`:'❌ Deposit rejected.')); socket.on('withdrawStatus',data=>alert(data.status==='approved'?`✅ Withdrawal -${data.amount} ETB processed.`:'❌ Withdrawal rejected.')); }
+        async function connect(){ const initData=tg.initData; if(!initData){ alert('Open inside Telegram'); return; } try{ const res=await fetch('/api/telegram-miniapp-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData})}); const data=await res.json(); if(!data.success){ alert('Auth failed'); return; } document.getElementById('profileUsername').innerText=data.username||'Player'; syncBalance(data.balance); }catch(e){ alert('Network error'); return; } socket=io(); socket.on('connect',()=>{ socket.emit('joinLobby'); }); socket.on('balanceUpdate',syncBalance); socket.on('lobbyState',state=>{ showLobby(state.startsIn); if(state.takenNumbers) updateGridWithTakenNumbers(state.takenNumbers); if(state.playersCount) playersCountEl.innerText=state.playersCount; }); socket.on('yourCard',card=>{ userCard=card; if(isGameActive) renderCard(card,'gameCard',true); else renderCard(card,'lobbyCardPreview',false); }); socket.on('cardTaken',data=>{ updateGridWithTakenNumbers(data.takenNumbers); selectedCardNumber=null; selectedNumberEl.textContent='-'; }); socket.on('playersCount',c=>{ playersCountEl.innerText=c; if(gamePlayersCountEl) gamePlayersCountEl.innerText=c; const prize=Math.floor(c*currentGameStake*0.8); winningBalanceEl.innerText=prize; }); socket.on('gameStarted',data=>{ if(data?.prizePool) winningBalanceEl.innerText=data.prizePool; if(data?.playersCount) gamePlayersCountEl.innerText=data.playersCount; showGame(); currentGameId='GAME_'+Date.now().toString(36).toUpperCase(); }); socket.on('numberCalled',data=>{ currentCallEl.innerText=formatCall(data.number); calledListEl.innerText='Called: '+ (data.calledNumbers||[]).map(n=>formatCall(n)).join(', '); }); socket.on('markedNumbers',nums=>{ markedNumbers=nums; if(isGameActive && userCard.length) renderCard(userCard,'gameCard',true); else if(!isGameActive && userCard.length) renderCard(userCard,'lobbyCardPreview',false); }); socket.on('gameEnded',data=>{ if(data.winningNumber) currentCallEl.innerText=formatCall(data.winningNumber); showWinnerOverlay(data); if(data.noWinner && currentGameId) addGameRecord(false,0,currentGameId,0,0); currentGameId=null; }); socket.on('invalidBingo',()=>alert('❌ Not a valid bingo yet!')); socket.on('depositStatus',data=>alert(data.status==='approved'?`✅ Deposit +${data.amount} ETB approved!`:'❌ Deposit rejected.')); socket.on('withdrawStatus',data=>alert(data.status==='approved'?`✅ Withdrawal -${data.amount} ETB processed.`:'❌ Withdrawal rejected.')); }
 
-        // Stake selection handlers
         function joinStake(stake) {
             if (!socket) {
                 alert("Connecting... please wait");
@@ -809,9 +844,6 @@
             socket.emit('selectStake', { stake: stake }, (response) => {
                 if (!response.success) {
                     alert(response.error || "Failed to join room");
-                } else {
-                    // successfully joined, server will send lobbyState etc.
-                    // show lobby (already handled by lobbyState event)
                 }
             });
         }
@@ -829,6 +861,8 @@
         document.getElementById('withdrawFromWalletBtn')?.addEventListener('click',openWithdrawTypeModal);
         document.getElementById('depositBtn')?.addEventListener('click',openDepositTypeModal);
         document.getElementById('withdrawBtn')?.addEventListener('click',openWithdrawTypeModal);
+        document.getElementById('stakeDepositBtn')?.addEventListener('click',openDepositTypeModal);
+        document.getElementById('stakeWithdrawBtn')?.addEventListener('click',openWithdrawTypeModal);
         document.querySelectorAll('#depositTypeModal .type-btn[data-type]').forEach(btn=>btn.addEventListener('click',()=>openDepositDetailsModal(btn.dataset.type)));
         document.getElementById('closeDepositTypeBtn')?.addEventListener('click',closeDepositTypeModal);
         document.getElementById('backDepositBtn')?.addEventListener('click',()=>{ document.getElementById('depositDetailsModal').classList.remove('active'); openDepositTypeModal(); });
