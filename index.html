@@ -8,6 +8,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
     <style>
+        /* all existing styles remain unchanged, plus new voice toggle */
         * {
             margin: 0;
             padding: 0;
@@ -635,6 +636,56 @@
         .btn-cancel {
             background: #f1f5f9;
         }
+        /* voice toggle switch */
+        .voice-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #fff3e0;
+            padding: 6px 12px;
+            border-radius: 40px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.2s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.2s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #f97316;
+        }
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
         @media (max-width: 550px) {
             .card-container td { width: 48px; height: 48px; border-radius: 18px; font-size: 1rem; }
             .card-container thead tr th { width: 48px; font-size: 1.2rem; }
@@ -644,8 +695,8 @@
             .winner-title { font-size: 1.6rem; }
             .prize-number { font-size: 1.8rem; }
             .stake-option { width: 110px; font-size: 1.3rem; padding: 12px 16px; }
+            .voice-toggle { font-size: 0.6rem; padding: 4px 8px; }
         }
-        /* new stake page balance bar */
         .stake-balance-bar {
             display: flex;
             justify-content: space-between;
@@ -705,13 +756,12 @@
         </div>
     </div>
 
-    <!-- STAKE PAGE (updated with balance and deposit/withdraw buttons) -->
+    <!-- STAKE PAGE (with balance and deposit/withdraw buttons) -->
     <div id="stakePage" class="page">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
             <h2 style="font-family:'Inter', monospace; font-weight:800; color:#ea580c;">🎲 ዶት ቢንጎ</h2>
             <div class="players-badge">DOT BINGO</div>
         </div>
-        <!-- new balance bar with deposit/withdraw -->
         <div class="stake-balance-bar">
             <span>💰 My Balance</span>
             <span class="stake-balance-amount" id="stakeBalance">0 ETB</span>
@@ -732,9 +782,30 @@
 
     <!-- LOBBY PAGE -->
     <div id="lobbyPage" class="page hidden">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;"><h2 style="font-weight:800; color:#ea580c;">🎲 DOT BINGO</h2><div class="players-badge">👥 <span id="playersCount">0</span></div></div>
-        <div class="balance-top"><div style="font-weight:700;">💰 BAL <span id="lobbyBalance">0</span> ETB</div><div style="display:flex; gap:8px;"><button id="depositBtn" style="background:#f97316; border:none; border-radius:40px; padding:6px 14px; color:white;">+Deposit</button><button id="withdrawBtn" style="background:#334155; border:none; border-radius:40px; padding:6px 14px; color:white;">-Withdraw</button></div><div class="timer-badge" id="lobbyTimer">30s</div></div>
-        <div style="display:flex; justify-content:space-between; margin:12px 0;"><span>🎴 Pick card ID:</span><span>Selected: <span id="selectedNumber">-</span></span><button id="randomCardBtn" style="background:#ea580c; border:none; border-radius:40px; padding:6px 16px; color:white;">✨ Random Card</button></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h2 style="font-weight:800; color:#ea580c;">🎲 DOT BINGO</h2>
+            <div class="players-badge">👥 <span id="playersCount">0</span></div>
+        </div>
+        <div class="balance-top">
+            <div style="font-weight:700;">💰 BAL <span id="lobbyBalance">0</span> ETB</div>
+            <div style="display:flex; gap:8px;">
+                <button id="depositBtn" style="background:#f97316; border:none; border-radius:40px; padding:6px 14px; color:white;">+Deposit</button>
+                <button id="withdrawBtn" style="background:#334155; border:none; border-radius:40px; padding:6px 14px; color:white;">-Withdraw</button>
+                <div class="voice-toggle">
+                    <span>🔊</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="voiceToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="timer-badge" id="lobbyTimer">30s</div>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin:12px 0;">
+            <span>🎴 Pick card ID:</span>
+            <span>Selected: <span id="selectedNumber">-</span></span>
+            <button id="randomCardBtn" style="background:#ea580c; border:none; border-radius:40px; padding:6px 16px; color:white;">✨ Random Card</button>
+        </div>
         <div id="numberGrid" class="grid-100"></div>
         <div style="margin-top:8px;">🎴 Your Bingo Card Preview</div>
         <div id="lobbyCardPreview" class="card-container"></div>
@@ -750,8 +821,25 @@
 
     <!-- GAME PAGE (compact) -->
     <div id="gamePage" class="page hidden">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><h2 style="font-weight:800; color:#ea580c; font-size:1.4rem;">⚡ BINGO ARENA</h2><div class="players-badge">👥 <span id="gamePlayersCount">0</span></div></div>
-        <div class="game-top-bar"><div style="font-weight:600;">💰 <span id="gameBalanceDisplay">0</span> ETB</div><div style="display:flex; gap:6px;"><button onclick="openDepositTypeModal()" style="background:#f97316; border:none; border-radius:40px; padding:4px 12px; color:white; font-size:0.7rem;">+Deposit</button><button onclick="openWithdrawTypeModal()" style="background:#334155; border:none; border-radius:40px; padding:4px 12px; color:white; font-size:0.7rem;">-Withdraw</button></div><button id="rulesBtnGame" style="background:#f1f5f9; color:#7c2d12; border:1px solid #fed7aa; border-radius:40px; padding:4px 12px; font-size:0.7rem;">📜 Rules</button></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <h2 style="font-weight:800; color:#ea580c; font-size:1.4rem;">⚡ BINGO ARENA</h2>
+            <div class="players-badge">👥 <span id="gamePlayersCount">0</span></div>
+        </div>
+        <div class="game-top-bar">
+            <div style="font-weight:600;">💰 <span id="gameBalanceDisplay">0</span> ETB</div>
+            <div style="display:flex; gap:6px;">
+                <button onclick="openDepositTypeModal()" style="background:#f97316; border:none; border-radius:40px; padding:4px 12px; color:white; font-size:0.7rem;">+Deposit</button>
+                <button onclick="openWithdrawTypeModal()" style="background:#334155; border:none; border-radius:40px; padding:4px 12px; color:white; font-size:0.7rem;">-Withdraw</button>
+                <div class="voice-toggle">
+                    <span>🔊</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="voiceToggleGame">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            <button id="rulesBtnGame" style="background:#f1f5f9; color:#7c2d12; border:1px solid #fed7aa; border-radius:40px; padding:4px 12px; font-size:0.7rem;">📜 Rules</button>
+        </div>
         <div class="prize-pool"><span>🏆 PRIZE POOL</span><div id="winningBalance">0 ETB</div></div>
         <div class="last-call-area"><div class="last-call-label">🎲 LAST CALL</div><div class="last-call-number" id="currentCall">0 - 75</div><div class="called-history" id="calledList">Called: —</div></div>
         <div id="gameCard" class="card-container"></div>
@@ -768,7 +856,67 @@
         let currentBalance = 0;
         let totalGames = 0, totalWins = 0, totalEarned = 0, recentGames = [], currentGameId = null;
         let currentMainPage = 'lobby';
+        let currentGameStake = 10;
+        let currentRoomState = null;
+        let voiceEnabled = true;
 
+        // ---------- Amharic voice functions ----------
+        const amharicNumbers = {
+            1: "አንድ", 2: "ሁለት", 3: "ሶስት", 4: "አራት", 5: "አምስት",
+            6: "ስድስት", 7: "ሰባት", 8: "ስምንት", 9: "ዘጠኝ", 10: "አስር",
+            11: "አስራ አንድ", 12: "አስራ ሁለት", 13: "አስራ ሶስት", 14: "አስራ አራት", 15: "አስራ አምስት",
+            16: "አስራ ስድስት", 17: "አስራ ሰባት", 18: "አስራ ስምንት", 19: "አስራ ዘጠኝ", 20: "ሃያ",
+            21: "ሃያ አንድ", 22: "ሃያ ሁለት", 23: "ሃያ ሶስት", 24: "ሃያ አራት", 25: "ሃያ አምስት",
+            26: "ሃያ ስድስት", 27: "ሃያ ሰባት", 28: "ሃያ ስምንት", 29: "ሃያ ዘጠኝ", 30: "ሰላሳ",
+            31: "ሰላሳ አንድ", 32: "ሰላሳ ሁለት", 33: "ሰላሳ ሶስት", 34: "ሰላሳ አራት", 35: "ሰላሳ አምስት",
+            36: "ሰላሳ ስድስት", 37: "ሰላሳ ሰባት", 38: "ሰላሳ ስምንት", 39: "ሰላሳ ዘጠኝ", 40: "አርባ",
+            41: "አርባ አንድ", 42: "አርባ ሁለት", 43: "አርባ ሶስት", 44: "አርባ አራት", 45: "አርባ አምስት",
+            46: "አርባ ስድስት", 47: "አርባ ሰባት", 48: "አርባ ስምንት", 49: "አርባ ዘጠኝ", 50: "ሃምሳ",
+            51: "ሃምሳ አንድ", 52: "ሃምሳ ሁለት", 53: "ሃምሳ ሶስት", 54: "ሃምሳ አራት", 55: "ሃምሳ አምስት",
+            56: "ሃምሳ ስድስት", 57: "ሃምሳ ሰባት", 58: "ሃምሳ ስምንት", 59: "ሃምሳ ዘጠኝ", 60: "ስልሳ",
+            61: "ስልሳ አንድ", 62: "ስልሳ ሁለት", 63: "ስልሳ ሶስት", 64: "ስልሳ አራት", 65: "ስልሳ አምስት",
+            66: "ስልሳ ስድስት", 67: "ስልሳ ሰባት", 68: "ስልሳ ስምንት", 69: "ስልሳ ዘጠኝ", 70: "ሰባ",
+            71: "ሰባ አንድ", 72: "ሰባ ሁለት", 73: "ሰባ ሶስት", 74: "ሰባ አራት", 75: "ሰባ አምስት"
+        };
+
+        function getAmharicLetter(letter) {
+            const map = { 'B': 'ቢ', 'I': 'አይ', 'N': 'ኤን', 'G': 'ጂ', 'O': 'ኦ' };
+            return map[letter] || letter;
+        }
+
+        function speakNumberAmharic(number) {
+            if (!voiceEnabled) return;
+            const letter = formatCall(number).split('-')[0];
+            const amharicLetter = getAmharicLetter(letter);
+            const numPart = number;
+            const amharicNum = amharicNumbers[numPart];
+            if (!amharicNum) return;
+            const phrase = `${amharicLetter} ${amharicNum}`;
+            const utterance = new SpeechSynthesisUtterance(phrase);
+            utterance.lang = 'am-ET';
+            utterance.rate = 0.9;
+            window.speechSynthesis.cancel(); // prevent overlapping
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function initVoiceToggle() {
+            const stored = localStorage.getItem('bingo_voice_enabled');
+            if (stored !== null) voiceEnabled = stored === 'true';
+            const toggle = document.getElementById('voiceToggle');
+            const toggleGame = document.getElementById('voiceToggleGame');
+            if (toggle) toggle.checked = voiceEnabled;
+            if (toggleGame) toggleGame.checked = voiceEnabled;
+            const updateToggle = (e) => {
+                voiceEnabled = e.target.checked;
+                localStorage.setItem('bingo_voice_enabled', voiceEnabled);
+                if (toggle && toggle.checked !== voiceEnabled) toggle.checked = voiceEnabled;
+                if (toggleGame && toggleGame.checked !== voiceEnabled) toggleGame.checked = voiceEnabled;
+            };
+            if (toggle) toggle.addEventListener('change', updateToggle);
+            if (toggleGame) toggleGame.addEventListener('change', updateToggle);
+        }
+
+        // ---------- Rest of the existing functions (loadStats, syncBalance, renderCard, etc.) ----------
         function loadStats() { try { totalGames = parseInt(localStorage.getItem('dot_bingo_total_games') || '0'); totalWins = parseInt(localStorage.getItem('dot_bingo_total_wins') || '0'); totalEarned = parseInt(localStorage.getItem('dot_bingo_total_earned') || '0'); recentGames = JSON.parse(localStorage.getItem('dot_bingo_recent_games') || '[]'); } catch(e) {} updateStatsUI(); }
         function saveStats() { localStorage.setItem('dot_bingo_total_games', totalGames); localStorage.setItem('dot_bingo_total_wins', totalWins); localStorage.setItem('dot_bingo_total_earned', totalEarned); localStorage.setItem('dot_bingo_recent_games', JSON.stringify(recentGames.slice(0, 10))); }
         function updateStatsUI() {
@@ -786,8 +934,6 @@
             saveStats(); updateStatsUI(); 
         }
 
-        let currentGameStake = 10;
-
         const lobbyPage = document.getElementById('lobbyPage'), gamePage = document.getElementById('gamePage'), historyPage = document.getElementById('historyPage'), walletPage = document.getElementById('walletPage'), profilePage = document.getElementById('profilePage'), stakePage = document.getElementById('stakePage');
         const lobbyTimerEl = document.getElementById('lobbyTimer'), playersCountEl = document.getElementById('playersCount'), lobbyBalanceEl = document.getElementById('lobbyBalance'), gamePlayersCountEl = document.getElementById('gamePlayersCount'), winningBalanceEl = document.getElementById('winningBalance'), currentCallEl = document.getElementById('currentCall'), calledListEl = document.getElementById('calledList'), selectedNumberEl = document.getElementById('selectedNumber'), numberGrid = document.getElementById('numberGrid'), lobbyCardPreview = document.getElementById('lobbyCardPreview');
         
@@ -800,15 +946,106 @@
             if(document.getElementById('stakeBalance')) document.getElementById('stakeBalance').innerText = v + ' ETB';
         }
         
-        function renderCard(card, containerId, clickable) { const cont = document.getElementById(containerId); if(!cont) return; cont.innerHTML = ''; const table = document.createElement('table'); table.style.borderCollapse='separate'; table.style.borderSpacing='10px'; const thead = document.createElement('thead'); const hr = document.createElement('tr'); ['B','I','N','G','O'].forEach(l=>{let th=document.createElement('th'); th.textContent=l; hr.appendChild(th);}); thead.appendChild(hr); table.appendChild(thead); const tbody = document.createElement('tbody'); for(let r=0;r<5;r++){ const tr=document.createElement('tr'); for(let c=0;c<5;c++){ const val=card[r][c]; const td=document.createElement('td'); td.textContent=val==='FREE'?'★':val; if(val==='FREE') td.classList.add('free'); if(markedNumbers.includes(val)) td.classList.add('marked'); if(clickable && val!=='FREE'){ td.style.cursor='pointer'; td.onclick=()=>{ if(isGameActive && socket) socket.emit('markNumber', val); };} tr.appendChild(td); } tbody.appendChild(tr); } table.appendChild(tbody); cont.appendChild(table); }
+        function renderCard(card, containerId, clickable) { 
+            const cont = document.getElementById(containerId); 
+            if(!cont) return; 
+            cont.innerHTML = ''; 
+            const table = document.createElement('table'); 
+            table.style.borderCollapse='separate'; 
+            table.style.borderSpacing='10px'; 
+            const thead = document.createElement('thead'); 
+            const hr = document.createElement('tr'); 
+            ['B','I','N','G','O'].forEach(l=>{let th=document.createElement('th'); th.textContent=l; hr.appendChild(th);}); 
+            thead.appendChild(hr); 
+            table.appendChild(thead); 
+            const tbody = document.createElement('tbody'); 
+            for(let r=0;r<5;r++){ 
+                const tr=document.createElement('tr'); 
+                for(let c=0;c<5;c++){ 
+                    const val=card[r][c]; 
+                    const td=document.createElement('td'); 
+                    td.textContent=val==='FREE'?'★':val; 
+                    if(val==='FREE') td.classList.add('free'); 
+                    if(markedNumbers.includes(val)) td.classList.add('marked'); 
+                    if(clickable && val!=='FREE'){ 
+                        td.style.cursor='pointer'; 
+                        td.onclick=()=>{ 
+                            if(isGameActive && socket) socket.emit('markNumber', { stake: currentGameStake, number: val }); 
+                        };
+                    } 
+                    tr.appendChild(td); 
+                } 
+                tbody.appendChild(tr); 
+            } 
+            table.appendChild(tbody); 
+            cont.appendChild(table); 
+        }
         
-        function buildNumberGrid() { numberGrid.innerHTML=''; for(let i=1;i<=100;i++){ const cell=document.createElement('div'); cell.className='grid-cell'; cell.dataset.number=i; cell.textContent=i; if(takenNumbers.has(i)) cell.classList.add('taken'); else cell.onclick=()=>{ if(!isGameActive && socket && !takenNumbers.has(i)) socket.emit('selectCardNumber', i); }; numberGrid.appendChild(cell); } if(selectedCardNumber){ const sel=numberGrid.querySelector(`[data-number='${selectedCardNumber}']`); if(sel) sel.classList.add('selected'); } }
+        function buildNumberGrid() { 
+            numberGrid.innerHTML=''; 
+            for(let i=1;i<=100;i++){ 
+                const cell=document.createElement('div'); 
+                cell.className='grid-cell'; 
+                cell.dataset.number=i; 
+                cell.textContent=i; 
+                if(takenNumbers.has(i)) cell.classList.add('taken'); 
+                else cell.onclick=()=>{ 
+                    if(!isGameActive && socket && !takenNumbers.has(i)) 
+                        socket.emit('selectCardNumber', { stake: currentGameStake, cardNumber: i }); 
+                }; 
+                numberGrid.appendChild(cell); 
+            } 
+            if(selectedCardNumber){ 
+                const sel=numberGrid.querySelector(`[data-number='${selectedCardNumber}']`); 
+                if(sel) sel.classList.add('selected'); 
+            } 
+        }
+
         function updateGridWithTakenNumbers(nums){ takenNumbers=new Set(nums); buildNumberGrid(); }
         function formatCall(n){ let l='B'; if(n>15) l='I'; if(n>30) l='N'; if(n>45) l='G'; if(n>60) l='O'; return `${l}-${n}`; }
-        function showLobby(sec){ currentMainPage='lobby'; stakePage.classList.add('hidden'); lobbyPage.classList.remove('hidden'); gamePage.classList.add('hidden'); historyPage.classList.add('hidden'); walletPage.classList.add('hidden'); profilePage.classList.add('hidden'); isGameActive=false; markedNumbers=[]; if(socket) socket.emit('getBalance'); startTimer(sec||30); if(userCard.length) renderCard(userCard,'lobbyCardPreview',false); updateStatsUI(); }
-        function showGame(){ currentMainPage='game'; lobbyPage.classList.add('hidden'); gamePage.classList.remove('hidden'); historyPage.classList.add('hidden'); walletPage.classList.add('hidden'); profilePage.classList.add('hidden'); isGameActive=true; clearInterval(lobbyTimerInterval); if(socket) socket.emit('getBalance'); if(userCard.length) renderCard(userCard,'gameCard',true); }
-        function startTimer(sec){ let left=sec; lobbyTimerEl.textContent=left+'s'; clearInterval(lobbyTimerInterval); lobbyTimerInterval=setInterval(()=>{ left--; if(left<=0){ clearInterval(lobbyTimerInterval); showGame(); } else lobbyTimerEl.textContent=left+'s'; },1000); }
-        function goBackToMain(){ if(currentMainPage==='lobby') showLobby(parseInt(lobbyTimerEl.textContent)||30); else showGame(); }
+        
+        function startLobbyTimer(endTimeMs) {
+            clearInterval(lobbyTimerInterval);
+            const updateTimer = () => {
+                const remaining = Math.max(0, Math.floor((endTimeMs - Date.now()) / 1000));
+                lobbyTimerEl.textContent = remaining + 's';
+                if (remaining <= 0) {
+                    clearInterval(lobbyTimerInterval);
+                }
+            };
+            updateTimer();
+            lobbyTimerInterval = setInterval(updateTimer, 1000);
+        }
+
+        function showLobbyFromState(roomState) {
+            currentMainPage = 'lobby';
+            stakePage.classList.add('hidden');
+            lobbyPage.classList.remove('hidden');
+            gamePage.classList.add('hidden');
+            historyPage.classList.add('hidden');
+            walletPage.classList.add('hidden');
+            profilePage.classList.add('hidden');
+            isGameActive = false;
+            if (roomState) {
+                playersCountEl.innerText = roomState.playersCount || 0;
+                startLobbyTimer(roomState.lobbyEndTime);
+            }
+            if (userCard.length) renderCard(userCard, 'lobbyCardPreview', false);
+            updateStatsUI();
+        }
+
+        function showGame() {
+            currentMainPage = 'game';
+            lobbyPage.classList.add('hidden');
+            gamePage.classList.remove('hidden');
+            historyPage.classList.add('hidden');
+            walletPage.classList.add('hidden');
+            profilePage.classList.add('hidden');
+            isGameActive = true;
+            clearInterval(lobbyTimerInterval);
+            if (socket) socket.emit('getBalance');
+            if (userCard.length) renderCard(userCard, 'gameCard', true);
+        }
 
         async function loadDepositAccounts(){ try{ const res=await fetch('/api/deposit-accounts'); depositAccounts=await res.json(); }catch(e){} }
         function openDepositTypeModal(){ document.getElementById('depositTypeModal').classList.add('active'); }
@@ -818,6 +1055,7 @@
         function openWithdrawTypeModal(){ document.getElementById('withdrawTypeModal').classList.add('active'); }
         function openWithdrawDetailsModal(type){ selectedWithdrawType=type; let title=type==='telebirr'?'Telebirr':type==='cbebirr'?'CBE Birr':'M-Pesa'; let hint=type==='mpesa'?'07xxxxxxxx':'09xxxxxxxx'; document.getElementById('withdrawDetailsTitle').innerHTML=`Withdraw via ${title}`; document.getElementById('withdrawReceiver').placeholder=hint; document.getElementById('withdrawReceiver').value=''; document.getElementById('withdrawAmount').value=''; document.getElementById('withdrawName').value=''; document.getElementById('withdrawDetailsModal').classList.add('active'); document.getElementById('withdrawTypeModal').classList.remove('active'); }
         async function submitWithdrawRequest(){ const receiver=document.getElementById('withdrawReceiver').value.trim(); const amount=document.getElementById('withdrawAmount').value.trim(); const name=document.getElementById('withdrawName').value.trim(); if(!name) return alert("Full name required"); if(!amount||isNaN(amount)||Number(amount)<20) return alert('Min 20 ETB'); if(!receiver.match(/^(09|07)\d{8}$/)) return alert(`Invalid ${selectedWithdrawType} number`); await fetch('/api/request-withdraw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount,phone:receiver,withdrawal_type:selectedWithdrawType,name})}); alert('Withdrawal request submitted!'); document.getElementById('withdrawDetailsModal').classList.remove('active'); }
+        
         function showWinnerOverlay(data){ 
             if(data.noWinner){ alert('No winner this round.'); return; } 
             const prize = data.prizeEach || data.totalPrize || 0;
@@ -833,7 +1071,97 @@
             document.body.appendChild(confDiv); setTimeout(()=>confDiv.remove(),4000);
             if(currentGameId) addGameRecord(true, prize, currentGameId, 1, winnersArray.length);
         }
-        async function connect(){ const initData=tg.initData; if(!initData){ alert('Open inside Telegram'); return; } try{ const res=await fetch('/api/telegram-miniapp-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData})}); const data=await res.json(); if(!data.success){ alert('Auth failed'); return; } document.getElementById('profileUsername').innerText=data.username||'Player'; syncBalance(data.balance); }catch(e){ alert('Network error'); return; } socket=io(); socket.on('connect',()=>{ socket.emit('joinLobby'); }); socket.on('balanceUpdate',syncBalance); socket.on('lobbyState',state=>{ showLobby(state.startsIn); if(state.takenNumbers) updateGridWithTakenNumbers(state.takenNumbers); if(state.playersCount) playersCountEl.innerText=state.playersCount; }); socket.on('yourCard',card=>{ userCard=card; if(isGameActive) renderCard(card,'gameCard',true); else renderCard(card,'lobbyCardPreview',false); }); socket.on('cardTaken',data=>{ updateGridWithTakenNumbers(data.takenNumbers); selectedCardNumber=null; selectedNumberEl.textContent='-'; }); socket.on('playersCount',c=>{ playersCountEl.innerText=c; if(gamePlayersCountEl) gamePlayersCountEl.innerText=c; const prize=Math.floor(c*currentGameStake*0.8); winningBalanceEl.innerText=prize; }); socket.on('gameStarted',data=>{ if(data?.prizePool) winningBalanceEl.innerText=data.prizePool; if(data?.playersCount) gamePlayersCountEl.innerText=data.playersCount; showGame(); currentGameId='GAME_'+Date.now().toString(36).toUpperCase(); }); socket.on('numberCalled',data=>{ currentCallEl.innerText=formatCall(data.number); calledListEl.innerText='Called: '+ (data.calledNumbers||[]).map(n=>formatCall(n)).join(', '); }); socket.on('markedNumbers',nums=>{ markedNumbers=nums; if(isGameActive && userCard.length) renderCard(userCard,'gameCard',true); else if(!isGameActive && userCard.length) renderCard(userCard,'lobbyCardPreview',false); }); socket.on('gameEnded',data=>{ if(data.winningNumber) currentCallEl.innerText=formatCall(data.winningNumber); showWinnerOverlay(data); if(data.noWinner && currentGameId) addGameRecord(false,0,currentGameId,0,0); currentGameId=null; }); socket.on('invalidBingo',()=>alert('❌ Not a valid bingo yet!')); socket.on('depositStatus',data=>alert(data.status==='approved'?`✅ Deposit +${data.amount} ETB approved!`:'❌ Deposit rejected.')); socket.on('withdrawStatus',data=>alert(data.status==='approved'?`✅ Withdrawal -${data.amount} ETB processed.`:'❌ Withdrawal rejected.')); }
+
+        async function connect(){ 
+            const initData=tg.initData; 
+            if(!initData){ alert('Open inside Telegram'); return; } 
+            try{ 
+                const res=await fetch('/api/telegram-miniapp-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData})}); 
+                const data=await res.json(); 
+                if(!data.success){ alert('Auth failed'); return; } 
+                document.getElementById('profileUsername').innerText=data.username||'Player'; 
+                syncBalance(data.balance); 
+            }catch(e){ alert('Network error'); return; } 
+            
+            socket=io(); 
+            
+            socket.on('connect',()=>{ });
+            socket.on('balanceUpdate',syncBalance); 
+            socket.on('joinedRoom', (data) => {
+                currentGameStake = data.stake;
+                userCard = data.card;
+                markedNumbers = data.markedNumbers || [];
+                currentRoomState = data.roomState;
+                if (data.calledNumbers && data.calledNumbers.length) {}
+                if (currentRoomState && currentRoomState.takenNumbers) {
+                    takenNumbers = new Set(currentRoomState.takenNumbers);
+                } else {
+                    takenNumbers.clear();
+                }
+                buildNumberGrid();
+                renderCard(userCard, 'lobbyCardPreview', false);
+                showLobbyFromState(currentRoomState);
+            });
+            socket.on('roomState', (state) => {
+                currentRoomState = state;
+                if (currentMainPage === 'lobby') {
+                    playersCountEl.innerText = state.playersCount || 0;
+                    if (state.lobbyEndTime) startLobbyTimer(state.lobbyEndTime);
+                    if (state.status === 'running') {
+                        showGame();
+                    }
+                } else if (currentMainPage === 'game') {
+                    gamePlayersCountEl.innerText = state.playersCount || 0;
+                }
+                if (currentMainPage === 'lobby' && state.playersCount) {
+                    const prize = Math.floor(state.playersCount * currentGameStake * 0.8);
+                    winningBalanceEl.innerText = prize;
+                }
+            });
+            socket.on('cardTaken', (data) => {
+                if (data.takenNumbers) updateGridWithTakenNumbers(data.takenNumbers);
+                selectedCardNumber = null;
+                selectedNumberEl.textContent = '-';
+            });
+            socket.on('yourCard', (card) => {
+                userCard = card;
+                if (isGameActive) renderCard(card, 'gameCard', true);
+                else renderCard(card, 'lobbyCardPreview', false);
+            });
+            socket.on('playersCount', (c) => {
+                playersCountEl.innerText = c;
+                if (gamePlayersCountEl) gamePlayersCountEl.innerText = c;
+                const prize = Math.floor(c * currentGameStake * 0.8);
+                winningBalanceEl.innerText = prize;
+            });
+            socket.on('gameStarted', (data) => {
+                if (data?.prizePool) winningBalanceEl.innerText = data.prizePool;
+                if (data?.playersCount) gamePlayersCountEl.innerText = data.playersCount;
+                showGame();
+                currentGameId = 'GAME_'+Date.now().toString(36).toUpperCase();
+            });
+            socket.on('numberCalled', (data) => {
+                const number = data.number;
+                currentCallEl.innerText = formatCall(number);
+                calledListEl.innerText = 'Called: '+ (data.calledNumbers||[]).map(n=>formatCall(n)).join(', ');
+                // Speak the number in Amharic
+                speakNumberAmharic(number);
+            });
+            socket.on('markedNumbers', (nums) => {
+                markedNumbers = nums;
+                if (isGameActive && userCard.length) renderCard(userCard, 'gameCard', true);
+                else if (!isGameActive && userCard.length) renderCard(userCard, 'lobbyCardPreview', false);
+            });
+            socket.on('gameEnded', (data) => {
+                if (data.winningNumber) currentCallEl.innerText = formatCall(data.winningNumber);
+                showWinnerOverlay(data);
+                if (data.noWinner && currentGameId) addGameRecord(false,0,currentGameId,0,0);
+                currentGameId = null;
+            });
+            socket.on('invalidBingo', () => alert('❌ Not a valid bingo yet!'));
+            socket.on('depositStatus', data => alert(data.status==='approved'?`✅ Deposit +${data.amount} ETB approved!`:'❌ Deposit rejected.'));
+            socket.on('withdrawStatus', data => alert(data.status==='approved'?`✅ Withdrawal -${data.amount} ETB processed.`:'❌ Withdrawal rejected.'));
+        }
 
         function joinStake(stake) {
             if (!socket) {
@@ -853,10 +1181,33 @@
         document.getElementById('stake30Btn')?.addEventListener('click', () => joinStake(30));
         document.getElementById('randomCardBtn')?.addEventListener('click',()=>{ if(!isGameActive && socket) socket.emit('newCardNumber'); });
         document.getElementById('bingoBtn')?.addEventListener('click',()=>{ if(socket && isGameActive) socket.emit('claimBingo'); });
-        document.querySelectorAll('.tab-btn').forEach(btn=>{ btn.addEventListener('click',()=>{ const page=btn.getAttribute('data-page'); clearInterval(lobbyTimerInterval); if(page==='lobby'){ if(currentMainPage==='lobby') showLobby(parseInt(lobbyTimerEl.textContent)||30); else showGame(); } else{ if(currentMainPage==='lobby') lobbyPage.classList.add('hidden'); else gamePage.classList.add('hidden'); if(page==='history') historyPage.classList.remove('hidden'); else if(page==='wallet'){ walletPage.classList.remove('hidden'); syncBalance(currentBalance); } else if(page==='profile'){ profilePage.classList.remove('hidden'); syncBalance(currentBalance); updateStatsUI(); } } }); });
-        document.getElementById('backFromHistoryBtn')?.addEventListener('click',goBackToMain);
-        document.getElementById('backFromWalletBtn')?.addEventListener('click',goBackToMain);
-        document.getElementById('backFromProfileBtn')?.addEventListener('click',goBackToMain);
+        
+        document.querySelectorAll('.tab-btn').forEach(btn=>{ 
+            btn.addEventListener('click',()=>{ 
+                const page=btn.getAttribute('data-page'); 
+                clearInterval(lobbyTimerInterval); 
+                if(page==='lobby'){ 
+                    if(currentMainPage==='lobby') showLobbyFromState(currentRoomState); 
+                    else showGame(); 
+                } else{ 
+                    if(currentMainPage==='lobby') lobbyPage.classList.add('hidden'); 
+                    else gamePage.classList.add('hidden'); 
+                    if(page==='history') historyPage.classList.remove('hidden'); 
+                    else if(page==='wallet'){ walletPage.classList.remove('hidden'); syncBalance(currentBalance); } 
+                    else if(page==='profile'){ profilePage.classList.remove('hidden'); syncBalance(currentBalance); updateStatsUI(); } 
+                } 
+            }); 
+        });
+        
+        document.getElementById('backFromHistoryBtn')?.addEventListener('click',() => goBackToMain());
+        document.getElementById('backFromWalletBtn')?.addEventListener('click',() => goBackToMain());
+        document.getElementById('backFromProfileBtn')?.addEventListener('click',() => goBackToMain());
+        
+        function goBackToMain() {
+            if (currentMainPage === 'lobby') showLobbyFromState(currentRoomState);
+            else showGame();
+        }
+        
         document.getElementById('depositFromWalletBtn')?.addEventListener('click',openDepositTypeModal);
         document.getElementById('withdrawFromWalletBtn')?.addEventListener('click',openWithdrawTypeModal);
         document.getElementById('depositBtn')?.addEventListener('click',openDepositTypeModal);
@@ -876,6 +1227,7 @@
         document.getElementById('rulesBtnGame')?.addEventListener('click',()=>rulesModal.classList.add('active'));
         closeRules?.addEventListener('click',()=>rulesModal.classList.remove('active'));
         loadDepositAccounts(); buildNumberGrid(); loadStats(); connect();
+        initVoiceToggle();
         stakePage.classList.remove('hidden');
     </script>
 </body>
