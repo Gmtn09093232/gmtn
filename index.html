@@ -8,7 +8,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
     <style>
-        /* (same styles as before – unchanged) */
+        /* (All styles unchanged – same as previous version) */
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
         body { min-height: 100vh; background: #f5f3f0; background-image: radial-gradient(circle at 20% 30%, rgba(0,0,0,0.02) 2%, transparent 2.5%); background-size: 40px 40px; font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; padding: 12px; display: flex; align-items: center; justify-content: center; }
         .page { max-width: 600px; width: 100%; margin: 0 auto; background: rgba(255, 255, 248, 0.96); border-radius: 48px; padding: 20px 18px 24px; box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255,255,255,0.9); border: 1px solid rgba(0, 0, 0, 0.05); backdrop-filter: blur(2px); }
@@ -180,7 +180,7 @@
         let currentRoomState = null;
         let voiceEnabled = true;
         let hasSelectedCard = false;
-        let returnToLobbyTimeout = null; // for auto switch after game ends
+        let returnToLobbyTimeout = null;
 
         const amharicNumbers = { 1:"አንድ",2:"ሁለት",3:"ሶስት",4:"አራት",5:"አምስት",6:"ስድስት",7:"ሰባት",8:"ስምንት",9:"ዘጠኝ",10:"አስር",11:"አስራ አንድ",12:"አስራ ሁለት",13:"አስራ ሶስት",14:"አስራ አራት",15:"አስራ አምስት",16:"አስራ ስድስት",17:"አስራ ሰባት",18:"አስራ ስምንት",19:"አስራ ዘጠኝ",20:"ሃያ",21:"ሃያ አንድ",22:"ሃያ ሁለት",23:"ሃያ ሶስት",24:"ሃያ አራት",25:"ሃያ አምስት",26:"ሃያ ስድስት",27:"ሃያ ሰባት",28:"ሃያ ስምንት",29:"ሃያ ዘጠኝ",30:"ሰላሳ",31:"ሰላሳ አንድ",32:"ሰላሳ ሁለት",33:"ሰላሳ ሶስት",34:"ሰላሳ አራት",35:"ሰላሳ አምስት",36:"ሰላሳ ስድስት",37:"ሰላሳ ሰባት",38:"ሰላሳ ስምንት",39:"ሰላሳ ዘጠኝ",40:"አርባ",41:"አርባ አንድ",42:"አርባ ሁለት",43:"አርባ ሶስት",44:"አርባ አራት",45:"አርባ አምስት",46:"አርባ ስድስት",47:"አርባ ሰባት",48:"አርባ ስምንት",49:"አርባ ዘጠኝ",50:"ሃምሳ",51:"ሃምሳ አንድ",52:"ሃምሳ ሁለት",53:"ሃምሳ ሶስት",54:"ሃምሳ አራት",55:"ሃምሳ አምስት",56:"ሃምሳ ስድስት",57:"ሃምሳ ሰባት",58:"ሃምሳ ስምንት",59:"ሃምሳ ዘጠኝ",60:"ስልሳ",61:"ስልሳ አንድ",62:"ስልሳ ሁለት",63:"ስልሳ ሶስት",64:"ስልሳ አራት",65:"ስልሳ አምስት",66:"ስልሳ ስድስት",67:"ስልሳ ሰባት",68:"ስልሳ ስምንት",69:"ስልሳ ዘጠኝ",70:"ሰባ",71:"ሰባ አንድ",72:"ሰባ ሁለት",73:"ሰባ ሶስት",74:"ሰባ አራት",75:"ሰባ አምስት"};
         function getAmharicLetter(letter) { const map = { 'B': 'ቢ', 'I': 'አይ', 'N': 'ኤን', 'G': 'ጂ', 'O': 'ኦ' }; return map[letter] || letter; }
@@ -247,18 +247,13 @@
             if(currentGameId) addGameRecord(true, prize, currentGameId, 1, winnersArray.length); 
         }
 
-        // Function to return to lobby after game ends
         function returnToLobbyAfterGame() {
-            // Clear any pending timeout
             if (returnToLobbyTimeout) clearTimeout(returnToLobbyTimeout);
             returnToLobbyTimeout = setTimeout(() => {
-                // Only switch if we are still on game page and game is not active (i.e., ended)
                 if (currentMainPage === 'game' && !isGameActive) {
-                    // Use currentRoomState (which should be the new lobby state after reset)
-                    // If roomState is not yet updated, the next roomState event will refresh it anyway.
                     showLobbyFromState(currentRoomState);
                 }
-            }, 5500); // Server resets after 5 seconds, wait a bit more
+            }, 5500);
         }
 
         async function connect(){ 
@@ -277,9 +272,22 @@
             socket.on('joinedRoom', (data) => { 
                 currentGameStake = data.stake; 
                 currentRoomState = data.roomState; 
+                if (data.card) {
+                    userCard = data.card;
+                    markedNumbers = data.markedNumbers || [];
+                    hasSelectedCard = true;
+                    selectedCardNumber = userCard ? null : null; // card number not directly needed
+                }
                 if (currentRoomState && currentRoomState.takenNumbers) takenNumbers = new Set(currentRoomState.takenNumbers); 
                 buildNumberGrid(); 
-                showLobbyFromState(currentRoomState); 
+                showLobbyFromState(currentRoomState);
+                if (userCard.length) {
+                    renderCard(userCard, 'lobbyCardPreview', false);
+                    if (currentRoomState.status === 'running') {
+                        showGame();
+                        renderCard(userCard, 'gameCard', true);
+                    }
+                }
             }); 
             socket.on('roomState', (state) => { 
                 currentRoomState = state; 
@@ -322,7 +330,14 @@
                 const number = data.number; 
                 currentCallEl.innerText = formatCall(number); 
                 calledListEl.innerText = 'Called: '+ (data.calledNumbers||[]).map(n=>formatCall(n)).join(', '); 
-                speakNumberAmharic(number); 
+                speakNumberAmharic(number);
+                // Auto-mark: if the number is on the player's card and not already marked
+                if (isGameActive && userCard && !markedNumbers.includes(number)) {
+                    const flat = userCard.flat();
+                    if (flat.includes(number)) {
+                        socket.emit('markNumber', { stake: currentGameStake, number: number });
+                    }
+                }
             }); 
             socket.on('markedNumbers', (nums) => { 
                 markedNumbers = nums; 
@@ -334,7 +349,6 @@
                 showWinnerOverlay(data); 
                 if (data.noWinner && currentGameId) addGameRecord(false,0,currentGameId,0,0); 
                 currentGameId = null; 
-                // Automatically return to lobby after a short delay
                 returnToLobbyAfterGame();
             }); 
             socket.on('invalidBingo', () => alert('❌ Not a valid bingo yet!')); 
