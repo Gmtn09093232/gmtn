@@ -143,13 +143,14 @@ function generateCard() {
   return transposed;
 }
 
-// ---------- GameRoom Class (fully working) ----------
+// ---------- GameRoom Class (delayed fee deduction) ----------
 class GameRoom {
   constructor(stake, io) {
     this.stake = stake;
     this.io = io;
     this.status = 'lobby';
-    this.players = [];
+    this.pendingPlayers = new Map();   // telegramId -> { username, ip }
+    this.players = [];                 // active players (paid, have card)
     this.takenCardNumbers = new Set();
     this.calledNumbers = [];
     this.entryFee = stake;
@@ -170,6 +171,7 @@ class GameRoom {
 
   resetGame() {
     this.status = 'lobby';
+    this.pendingPlayers.clear();
     this.players = [];
     this.takenCardNumbers.clear();
     this.calledNumbers = [];
@@ -196,10 +198,12 @@ class GameRoom {
       stake: this.stake,
       status: this.status,
       playersCount: this.players.length,
+      pendingCount: this.pendingPlayers.size,
       lobbyEndTime: this.lobbyEndTime,
       prizePool: this.prizePool,
       calledNumbersCount: this.calledNumbers.length,
-      winners: this.winners.map(w => ({ username: w.username, telegramId: w.telegramId }))
+      winners: this.winners.map(w => ({ username: w.username, telegramId: w.telegramId })),
+      takenNumbers: Array.from(this.takenCardNumbers)
     };
   }
 
@@ -211,40 +215,64 @@ class GameRoom {
     return state;
   }
 
-  async addPlayer(telegramId, username, ip, preferredCardNumber = null) {
+  // Called when player selects a stake (no fee, no card)
+  async addPendingPlayer(telegramId, username, ip) {
     if (this.status !== 'lobby') throw new Error('Game already started or ended');
-    if (this.players.find(p => p.telegramId === telegramId)) throw new Error('Already in this room');
-    const user = await loadUser(telegramId, username);
-    if (user.balance < this.entryFee) throw new Error(`Insufficient balance. Need ${this.entryFee} ETB.`);
-    // Deduct entry fee
-    user.balance -= this.entryFee;
-    await supabase.from('users').update({ balance: user.balance }).eq('telegram_id', telegramId);
-    users[telegramId].balance = user.balance;
-    // Assign card number
-    let cardNumber;
-    if (preferredCardNumber && !this.takenCardNumbers.has(preferredCardNumber) && preferredCardNumber >=1 && preferredCardNumber <=100) {
-      cardNumber = preferredCardNumber;
-    } else {
-      const freeNumbers = [];
-      for (let i=1; i<=100; i++) if (!this.takenCardNumbers.has(i)) freeNumbers.push(i);
-      if (freeNumbers.length === 0) throw new Error('No free card numbers');
-      cardNumber = freeNumbers[Math.floor(Math.random() * freeNumbers.length)];
+    if (this.players.find(p => p.telegramId === telegramId) || this.pendingPlayers.has(telegramId)) {
+      throw new Error('Already in this room');
     }
-    this.takenCardNumbers.add(cardNumber);
-    const card = this.cardSet[cardNumber-1];
-    const player = { telegramId, username, card, markedNumbers: [], cardNumber, ip };
-    this.players.push(player);
-    Audit.cardAssigned(this.getRoomId(), telegramId, ip, { cardId: cardNumber.toString(), grid: card, stake: this.stake });
+    this.pendingPlayers.set(telegramId, { username, ip });
     const socket = await getSocketByUserId(telegramId);
     if (socket) {
       socket.join(this.getRoomId());
       socket.emit('joinedRoom', {
         stake: this.stake,
-        card: player.card,
-        markedNumbers: player.markedNumbers,
-        roomState: this.getPublicState(),
-        calledNumbers: this.calledNumbers
+        roomState: this.getPublicState()
       });
+    }
+    this.broadcastState();
+    return true;
+  }
+
+  // Called when player selects a card number (deduct fee, assign card)
+  async selectCardNumber(telegramId, username, ip, cardNumber) {
+    if (this.status !== 'lobby') throw new Error('Game already started or ended');
+    if (!this.pendingPlayers.has(telegramId)) {
+      throw new Error('You must join the room first');
+    }
+    if (this.players.find(p => p.telegramId === telegramId)) {
+      throw new Error('You already selected a card');
+    }
+    // Deduct fee
+    const user = await loadUser(telegramId, username);
+    if (user.balance < this.entryFee) {
+      throw new Error(`Insufficient balance. Need ${this.entryFee} ETB.`);
+    }
+    user.balance -= this.entryFee;
+    await supabase.from('users').update({ balance: user.balance }).eq('telegram_id', telegramId);
+    users[telegramId].balance = user.balance;
+
+    // Assign card number
+    const num = parseInt(cardNumber);
+    if (this.takenCardNumbers.has(num)) throw new Error('Card number already taken');
+    this.takenCardNumbers.add(num);
+    const card = this.cardSet[num-1];
+    const player = {
+      telegramId,
+      username,
+      card,
+      markedNumbers: [],
+      cardNumber: num,
+      ip
+    };
+    this.players.push(player);
+    this.pendingPlayers.delete(telegramId);
+    Audit.cardAssigned(this.getRoomId(), telegramId, ip, { cardId: num.toString(), grid: card, stake: this.stake });
+
+    const socket = await getSocketByUserId(telegramId);
+    if (socket) {
+      socket.emit('yourCard', card);
+      socket.emit('markedNumbers', []);
       socket.emit('balanceUpdate', user.balance);
     }
     this.broadcastState();
@@ -252,21 +280,27 @@ class GameRoom {
   }
 
   async removePlayer(telegramId) {
-    const idx = this.players.findIndex(p => p.telegramId === telegramId);
-    if (idx !== -1) {
-      const player = this.players[idx];
-      this.takenCardNumbers.delete(player.cardNumber);
-      this.players.splice(idx, 1);
-      const socket = await getSocketByUserId(telegramId);
-      if (socket) socket.leave(this.getRoomId());
-      this.broadcastState();
+    // Remove from pending or active
+    if (this.pendingPlayers.has(telegramId)) {
+      this.pendingPlayers.delete(telegramId);
+    } else {
+      const idx = this.players.findIndex(p => p.telegramId === telegramId);
+      if (idx !== -1) {
+        const player = this.players[idx];
+        this.takenCardNumbers.delete(player.cardNumber);
+        this.players.splice(idx, 1);
+        // No refund – fee already deducted
+      }
     }
+    const socket = await getSocketByUserId(telegramId);
+    if (socket) socket.leave(this.getRoomId());
+    this.broadcastState();
   }
 
   async changeCardNumber(telegramId, newCardNumber) {
     if (this.status !== 'lobby') throw new Error('Cannot change card after game starts');
     const player = this.players.find(p => p.telegramId === telegramId);
-    if (!player) throw new Error('Not in this room');
+    if (!player) throw new Error('You have not selected a card yet');
     if (this.takenCardNumbers.has(newCardNumber)) throw new Error('Card number taken');
     this.takenCardNumbers.delete(player.cardNumber);
     player.cardNumber = newCardNumber;
@@ -283,13 +317,8 @@ class GameRoom {
 
   async startGame() {
     if (this.status !== 'lobby') return;
-    // Remove players with insufficient balance (should not happen because fee deducted at join)
-    const toRemove = [];
-    for (const p of this.players) {
-      const user = users[p.telegramId];
-      if (!user || user.balance < 0) toRemove.push(p.telegramId);
-    }
-    for (const uid of toRemove) await this.removePlayer(uid);
+    // Remove all pending players (never paid)
+    this.pendingPlayers.clear();
     if (this.players.length === 0) {
       this.resetGame();
       return;
@@ -489,7 +518,7 @@ function verifyTelegram(initData) {
   return calculatedHash === hash;
 }
 
-// ---------- Express Endpoints (deposit, withdraw, admin, audit) ----------
+// ---------- Express Endpoints ----------
 app.get('/api/deposit-accounts', (req, res) => {
   res.json({
     telebirr: process.env.ADMIN_PHONE || '0924839730',
@@ -717,6 +746,12 @@ io.on('connection', async (socket) => {
         roomState: room.getPublicState(),
         calledNumbers: room.calledNumbers
       });
+    } else if (room.pendingPlayers.has(socket.userId)) {
+      socket.join(room.getRoomId());
+      socket.emit('joinedRoom', {
+        stake: room.stake,
+        roomState: room.getPublicState()
+      });
     } else {
       userActiveRoom.delete(socket.userId);
     }
@@ -734,9 +769,9 @@ io.on('connection', async (socket) => {
         else throw new Error('Already in another room. Leave first.');
       }
       const ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
-      const player = await room.addPlayer(socket.userId, socket.username, ip, preferredCardNumber);
+      await room.addPendingPlayer(socket.userId, socket.username, ip);
       userActiveRoom.set(socket.userId, stakeNum);
-      if (callback) callback({ success: true, player: { card: player.card, markedNumbers: player.markedNumbers } });
+      if (callback) callback({ success: true });
     } catch (err) {
       if (callback) callback({ success: false, error: err.message });
       else socket.emit('error', err.message);
@@ -762,8 +797,9 @@ io.on('connection', async (socket) => {
     if (!room) return callback({ success: false, error: 'Room not found' });
     if (userActiveRoom.get(socket.userId) !== stakeNum) return callback({ success: false, error: 'Not in this room' });
     try {
-      await room.changeCardNumber(socket.userId, cardNumber);
-      callback({ success: true });
+      const ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+      const player = await room.selectCardNumber(socket.userId, socket.username, ip, cardNumber);
+      callback({ success: true, player: { card: player.card, markedNumbers: player.markedNumbers } });
     } catch (err) {
       callback({ success: false, error: err.message });
     }
