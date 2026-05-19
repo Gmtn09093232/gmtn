@@ -8,7 +8,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
     <style>
-        /* (All styles unchanged – same as previous version) */
+        /* (all styles exactly as in previous working version) */
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
         body { min-height: 100vh; background: #f5f3f0; background-image: radial-gradient(circle at 20% 30%, rgba(0,0,0,0.02) 2%, transparent 2.5%); background-size: 40px 40px; font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; padding: 12px; display: flex; align-items: center; justify-content: center; }
         .page { max-width: 600px; width: 100%; margin: 0 auto; background: rgba(255, 255, 248, 0.96); border-radius: 48px; padding: 20px 18px 24px; box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255,255,255,0.9); border: 1px solid rgba(0, 0, 0, 0.05); backdrop-filter: blur(2px); }
@@ -276,7 +276,6 @@
                     userCard = data.card;
                     markedNumbers = data.markedNumbers || [];
                     hasSelectedCard = true;
-                    selectedCardNumber = userCard ? null : null; // card number not directly needed
                 }
                 if (currentRoomState && currentRoomState.takenNumbers) takenNumbers = new Set(currentRoomState.takenNumbers); 
                 buildNumberGrid(); 
@@ -331,13 +330,7 @@
                 currentCallEl.innerText = formatCall(number); 
                 calledListEl.innerText = 'Called: '+ (data.calledNumbers||[]).map(n=>formatCall(n)).join(', '); 
                 speakNumberAmharic(number);
-                // Auto-mark: if the number is on the player's card and not already marked
-                if (isGameActive && userCard && !markedNumbers.includes(number)) {
-                    const flat = userCard.flat();
-                    if (flat.includes(number)) {
-                        socket.emit('markNumber', { stake: currentGameStake, number: number });
-                    }
-                }
+                // No auto‑mark – player clicks manually
             }); 
             socket.on('markedNumbers', (nums) => { 
                 markedNumbers = nums; 
