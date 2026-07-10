@@ -1,404 +1,971 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>✨ DOT BINGO · ዶት ቢንጎ ✨</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🏭 Bahir-Dar Factory · Complete Production Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     <style>
-        /* (all styles unchanged – same as previous version) */
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
-        body { min-height: 100vh; background: #f5f3f0; background-image: radial-gradient(circle at 20% 30%, rgba(0,0,0,0.02) 2%, transparent 2.5%); background-size: 40px 40px; font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; padding: 12px; display: flex; align-items: center; justify-content: center; }
-        .page { max-width: 600px; width: 100%; margin: 0 auto; background: rgba(255, 255, 248, 0.96); border-radius: 48px; padding: 20px 18px 24px; box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255,255,255,0.9); border: 1px solid rgba(0, 0, 0, 0.05); backdrop-filter: blur(2px); }
-        .hidden { display: none !important; }
-        .card-container { margin: 20px 0 16px; display: flex; justify-content: center; background: #fef7ef; border-radius: 40px; padding: 14px 8px; box-shadow: 0 8px 18px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.8); overflow-x: auto; }
-        .card-container table { border-collapse: separate; border-spacing: 10px; margin: 0 auto; }
-        .card-container thead tr th { font-family: 'Inter', monospace; font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, #ea580c, #f97316); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; padding: 8px 0; text-align: center; width: 58px; }
-        .card-container td { width: 58px; height: 58px; background: white; border-radius: 24px; text-align: center; vertical-align: middle; font-weight: 700; font-size: 1.2rem; font-family: 'Inter', monospace; color: #1e293b; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255,255,255,0.6); border: 1px solid #fed7aa; transition: all 0.2s cubic-bezier(0.2, 0.9, 0.4, 1.1); cursor: pointer; }
-        .card-container td.free { background: #fff3e6; color: #ea580c; font-size: 1.5rem; border-color: #fdba74; }
-        .card-container td.marked { background: linear-gradient(135deg, #f97316, #ea580c); color: white; box-shadow: 0 0 0 2px #ffedd5, inset 0 1px 2px rgba(0,0,0,0.1); border-color: #fbbf24; transform: scale(0.94); }
-        .last-call-area { background: #1e1e24; border-radius: 60px; padding: 14px 18px; margin: 12px 0 18px; text-align: center; box-shadow: inset 0 1px 1px rgba(255,255,255,0.05), 0 12px 25px -10px rgba(0,0,0,0.2); border: 1px solid #2d2d35; }
-        .last-call-label { font-size: 0.7rem; letter-spacing: 3px; font-weight: 600; color: #facc15; text-transform: uppercase; background: #0a0a0c; display: inline-block; padding: 5px 18px; border-radius: 40px; }
-        .last-call-number { font-size: 2.7rem; font-weight: 800; font-family: 'Inter', monospace; color: #fef08a; text-shadow: 0 0 6px #f97316; letter-spacing: 5px; margin: 8px 0 5px; background: #0a0a0c; border-radius: 60px; padding: 6px; }
-        .called-history { background: #0a0a0c; padding: 8px 14px; border-radius: 48px; font-size: 0.7rem; color: #fcd34d; font-weight: 500; overflow-x: auto; white-space: nowrap; font-family: monospace; text-align: center; margin-top: 8px; border: 1px solid #2d2d35; }
-        .balance-top, .game-top-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; background: #ffffffdd; backdrop-filter: blur(4px); padding: 6px 14px; border-radius: 60px; margin-bottom: 16px; border: 1px solid #fed7aa; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }
-        .game-top-bar div:first-child { font-size: 0.85rem; font-weight: 600; background: #fef3c7; padding: 4px 10px; border-radius: 40px; }
-        .game-top-bar button { font-size: 0.7rem; padding: 5px 12px; }
-        .players-badge { background: #f97316; padding: 6px 18px; border-radius: 40px; color: white; font-weight: 600; font-size: 0.75rem; box-shadow: 0 2px 8px rgba(249,115,22,0.2); }
-        .timer-badge { font-size: 1.3rem; font-weight: 700; font-family: monospace; color: #ea580c; background: #fef3c7; padding: 4px 18px; border-radius: 50px; letter-spacing: 1px; border: 1px solid #fde68a; }
-        .grid-100 { display: grid; grid-template-columns: repeat(10, 1fr); gap: 8px; margin: 20px 0; background: #fef9f0; padding: 14px; border-radius: 40px; box-shadow: inset 0 0 0 1px #fff6e5, 0 4px 12px rgba(0,0,0,0.02); }
-        .grid-cell { background: white; border-radius: 20px; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.75rem; color: #334155; border: 1px solid #fed7aa; cursor: pointer; transition: 0.1s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
-        .grid-cell.taken { background: #e2e8f0; color: #94a3b8; text-decoration: line-through; border-color: #cbd5e1; cursor: not-allowed; }
-        .grid-cell.selected { background: #f97316; color: white; box-shadow: 0 0 0 2px #fef3c7; border-color: #facc15; transform: scale(0.96); }
-        button { min-height: 44px; font-family: 'Inter', sans-serif; font-weight: 600; transition: all 0.1s ease; cursor: pointer; }
-        button:active { transform: scale(0.96); }
-        #bingoBtn { display: block; width: 90%; max-width: 340px; margin: 24px auto 20px; background: linear-gradient(105deg, #f97316, #ea580c); color: white; font-size: 1.5rem; font-weight: 800; padding: 14px 12px; border-radius: 80px; border: none; box-shadow: 0 10px 0 #9a3412, 0 0 20px rgba(249,115,22,0.4); letter-spacing: 2px; text-shadow: 0 1px 2px rgba(0,0,0,0.2); transition: 0.08s linear; }
-        #bingoBtn:active { transform: translateY(5px); box-shadow: 0 5px 0 #9a3412; }
-        .tab-bar { display: flex; background: #ffffffcc; backdrop-filter: blur(8px); border-radius: 100px; margin-top: 20px; padding: 6px 8px; gap: 8px; border: 1px solid #fed7aa; }
-        .tab-btn { flex: 1; background: transparent; border: none; padding: 10px 0; border-radius: 80px; font-weight: 600; font-size: 0.8rem; color: #7c2d12; cursor: pointer; transition: 0.1s; }
-        .tab-btn.active { background: #f97316; color: white; box-shadow: 0 2px 8px rgba(249,115,22,0.3); }
-        .prize-pool { background: #fef3c7; border-radius: 40px; text-align: center; padding: 6px 12px; margin: 6px 0 12px; border: 1px solid #fed7aa; }
-        .prize-pool span { font-size: 0.7rem; font-weight: 600; color: #b45309; letter-spacing: 0.5px; }
-        .prize-pool div { font-size: 1.2rem; font-weight: 800; color: #ea580c; line-height: 1.3; }
-        .winner-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(16px); display: flex; align-items: center; justify-content: center; z-index: 2000; visibility: hidden; opacity: 0; transition: visibility 0.2s, opacity 0.2s; }
-        .winner-modal.active { visibility: visible; opacity: 1; }
-        .winner-card { background: rgba(255, 255, 245, 0.98); backdrop-filter: blur(12px); border-radius: 64px; padding: 28px 24px; text-align: center; width: 88%; max-width: 340px; box-shadow: 0 30px 50px -20px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255,255,255,0.8); border: 2px solid rgba(249, 115, 22, 0.5); animation: winnerPop 0.35s cubic-bezier(0.34, 1.2, 0.64, 1); transform-origin: center; }
-        @keyframes winnerPop { 0% { transform: scale(0.85); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-        .winner-trophy { font-size: 4rem; filter: drop-shadow(0 8px 12px rgba(249,115,22,0.4)); margin-bottom: 8px; animation: floatTrophy 1.2s ease-in-out infinite alternate; }
-        @keyframes floatTrophy { 0% { transform: translateY(0px); } 100% { transform: translateY(-8px); } }
-        .winner-title { font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, #f97316, #ea580c); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: -0.5px; margin-bottom: 12px; text-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .winner-sub { font-size: 0.8rem; color: #475569; text-transform: uppercase; letter-spacing: 1px; font-weight: 500; margin-bottom: 12px; }
-        .winners-avatars { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 16px 0; max-height: 140px; overflow-y: auto; padding: 8px; background: rgba(255,237,213,0.4); border-radius: 48px; }
-        .winner-badge { background: #f97316; color: white; padding: 6px 14px; border-radius: 40px; font-size: 0.8rem; font-weight: 600; box-shadow: 0 2px 6px rgba(0,0,0,0.1); display: inline-flex; align-items: center; gap: 6px; }
-        .winner-badge::before { content: "👑"; font-size: 0.8rem; }
-        .prize-amount { background: linear-gradient(105deg, #fef3c7, #ffedd5); border-radius: 60px; padding: 12px; margin: 18px 0 16px; border: 1px solid #fed7aa; }
-        .prize-label { font-size: 0.7rem; font-weight: 600; color: #b45309; text-transform: uppercase; }
-        .prize-number { font-size: 2.2rem; font-weight: 800; color: #ea580c; line-height: 1; letter-spacing: -0.5px; }
-        .prize-number small { font-size: 1rem; font-weight: 600; }
-        .celebrate-btn { background: #f97316; border: none; width: 80%; padding: 14px; border-radius: 60px; font-weight: 700; font-size: 1rem; color: white; margin-top: 8px; box-shadow: 0 4px 12px rgba(249,115,22,0.4); transition: 0.1s; }
-        .celebrate-btn:active { transform: scale(0.96); }
-        .confetti { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; overflow: hidden; }
-        .confetti-piece { position: absolute; width: 8px; height: 16px; background: #f97316; top: -20px; opacity: 0.8; animation: fall 4s linear forwards; }
-        @keyframes fall { to { transform: translateY(100vh) rotate(360deg); opacity: 0; } }
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000; visibility: hidden; opacity: 0; transition: 0.2s; }
-        .modal.active { visibility: visible; opacity: 1; }
-        .modal-content { background: #ffffff; border-radius: 48px; padding: 24px; max-width: 92%; width: 380px; border: 1px solid #fed7aa; box-shadow: 0 30px 40px -15px rgba(0,0,0,0.2); }
-        .bank-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; border-bottom: 2px solid #ffedd5; padding-bottom: 12px; }
-        .bank-icon { font-size: 1.8rem; }
-        .bank-title { font-size: 1.3rem; font-weight: 800; color: #1e293b; }
-        .bank-sub { color: #475569; font-size: 0.7rem; }
-        .account-card { background: #f8fafc; border-radius: 28px; padding: 14px; margin: 14px 0; border-left: 4px solid #f97316; }
-        .input-group { margin: 14px 0; }
-        .input-group label { display: block; font-size: 0.7rem; font-weight: 600; color: #334155; margin-bottom: 6px; }
-        .input-group input, .input-group .file-label { width: 100%; padding: 12px; border-radius: 60px; border: 1px solid #e2e8f0; background: #ffffff; font-size: 0.85rem; }
-        .file-label { text-align: center; background: #fef3c7; cursor: pointer; font-weight: 600; color: #b45309; }
-        .transaction-summary { background: #f1f5f9; border-radius: 28px; padding: 12px; margin: 12px 0; font-size: 0.75rem; color: #1e293b; }
-        .modal-buttons { display: flex; gap: 12px; margin-top: 20px; }
-        .modal-buttons button { flex: 1; padding: 12px; border-radius: 60px; font-weight: 700; border: none; }
-        .btn-primary { background: #f97316; color: white; }
-        .btn-secondary { background: #e2e8f0; color: #1e293b; }
-        .type-btn { background: #f1f5f9; display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 60px; margin: 8px 0; font-weight: 600; border: 1px solid #e2e8f0; width: 100%; cursor: pointer; color: #1e293b; }
-        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 8px; }
-        .back-btn { background: #f1f5f9; border: 1px solid #fed7aa; padding: 8px 20px; border-radius: 40px; color: #7c2d12; font-weight: 600; }
-        .game-history-card { background: #fef9f0; border-radius: 32px; padding: 16px; margin-bottom: 12px; border: 1px solid #fed7aa; }
-        .profile-stat { background: #fef9f0; border-radius: 32px; padding: 16px; text-align: center; margin: 12px 0; border: 1px solid #fed7aa; }
-        .stake-page-buttons { display: flex; gap: 20px; justify-content: center; margin: 30px 0; flex-wrap: wrap; }
-        .stake-option { background: #fef9f0; border: 1px solid #fed7aa; padding: 16px 24px; border-radius: 60px; font-size: 1.6rem; font-weight: 800; color: #ea580c; box-shadow: 0 6px 0 #fed7aa; cursor: pointer; width: 140px; text-align: center; }
-        .rules-text { background: #fef9f0; border-radius: 32px; padding: 18px; margin-top: 20px; font-size: 0.85rem; line-height: 1.5; color: #1e293b; }
-        .telegram-links a { color: #f97316; text-decoration: none; }
-        .stake-balance-bar { display: flex; justify-content: space-between; align-items: center; background: #fef3c7; border-radius: 60px; padding: 8px 16px; margin-bottom: 20px; border: 1px solid #fed7aa; }
-        .stake-balance-amount { font-weight: 800; font-size: 1.2rem; color: #ea580c; }
-        .voice-toggle { display: flex; align-items: center; gap: 8px; background: #fff3e0; padding: 6px 12px; border-radius: 40px; font-size: 0.7rem; font-weight: 600; }
-        .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
-        .toggle-switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: 0.2s; border-radius: 34px; }
-        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: 0.2s; border-radius: 50%; }
-        input:checked + .slider { background-color: #f97316; }
-        input:checked + .slider:before { transform: translateX(20px); }
-        @media (max-width: 550px) {
-            .card-container td { width: 48px; height: 48px; border-radius: 18px; font-size: 1rem; }
-            .card-container thead tr th { width: 48px; font-size: 1.2rem; }
-            .grid-100 { gap: 5px; }
-            #bingoBtn { font-size: 1.3rem; padding: 12px; }
-            .winner-card { padding: 20px 16px; width: 92%; }
-            .winner-title { font-size: 1.6rem; }
-            .prize-number { font-size: 1.8rem; }
-            .stake-option { width: 110px; font-size: 1.3rem; padding: 12px 16px; }
-            .voice-toggle { font-size: 0.6rem; padding: 4px 8px; }
+        /* ───────────── RESET & BASE ───────────── */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+        }
+        body {
+            background: #f0f4fa;
+            padding: 18px;
+            color: #1e293b;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        /* ───────────── HEADER ───────────── */
+        .header {
+            background: linear-gradient(135deg, #0b2a4a, #1a4b6d);
+            color: #fff;
+            padding: 22px 30px;
+            border-radius: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 28px rgba(11, 42, 74, 0.30);
+        }
+        .header h1 {
+            font-weight: 600;
+            font-size: 1.7rem;
+            letter-spacing: -0.3px;
+        }
+        .header h1 i {
+            margin-right: 12px;
+            color: #facc15;
+        }
+        .header .week-badge {
+            background: rgba(255, 255, 255, 0.13);
+            padding: 8px 24px;
+            border-radius: 40px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .header .week-badge i {
+            margin-right: 8px;
+            color: #7ec8e3;
+        }
+
+        /* ───────────── STAT CARDS ───────────── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: #fff;
+            border-radius: 14px;
+            padding: 18px 18px 14px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            border: 1px solid #e9edf2;
+            transition: transform 0.12s;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+        .stat-card .label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748b;
+            font-weight: 600;
+        }
+        .stat-card .value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-top: 4px;
+            color: #0b2a4a;
+        }
+        .stat-card .sub {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 2px;
+        }
+        .stat-card .icon {
+            float: right;
+            font-size: 1.6rem;
+            opacity: 0.18;
+            color: #1a4b6d;
+        }
+
+        /* ───────────── TAB NAV ───────────── */
+        .sheet-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 14px;
+        }
+        .sheet-tab {
+            background: #f1f5f9;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 30px;
+            font-weight: 500;
+            font-size: 0.78rem;
+            color: #475569;
+            cursor: pointer;
+            transition: 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .sheet-tab:hover {
+            background: #e2e8f0;
+        }
+        .sheet-tab.active {
+            background: #0b2a4a;
+            color: #fff;
+            box-shadow: 0 2px 10px rgba(11, 42, 74, 0.25);
+        }
+        .sheet-tab .badge-plan {
+            background: #facc15;
+            color: #0b2a4a;
+            border-radius: 30px;
+            padding: 0 8px;
+            font-size: 0.6rem;
+            font-weight: 700;
+        }
+
+        /* ───────────── CARDS ───────────── */
+        .card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 22px 24px 26px;
+            border: 1px solid #e9edf2;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+            margin-bottom: 22px;
+        }
+        .card h3 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin-bottom: 14px;
+            color: #0b2a4a;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card h3 i {
+            color: #1a4b6d;
+            font-size: 1.1rem;
+        }
+        .card h3 .subtitle {
+            font-weight: 400;
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-left: 6px;
+        }
+        .table-wrap {
+            overflow-x: auto;
+            margin-top: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+        th {
+            background: #f1f5f9;
+            color: #1e293b;
+            font-weight: 600;
+            padding: 9px 8px;
+            text-align: left;
+            border-bottom: 2px solid #dce1e8;
+            white-space: nowrap;
+        }
+        td {
+            padding: 8px 8px;
+            border-bottom: 1px solid #edf2f7;
+            vertical-align: middle;
+        }
+        tr:hover td {
+            background: #fafcff;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 12px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+        .badge-green {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .badge-yellow {
+            background: #fef9c3;
+            color: #854d0e;
+        }
+        .badge-red {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .badge-blue {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        .badge-purple {
+            background: #ede9fe;
+            color: #5b21b6;
+        }
+        .badge-gray {
+            background: #f1f5f9;
+            color: #475569;
+        }
+        .text-muted {
+            color: #94a3b8;
+            font-size: 0.75rem;
+        }
+
+        /* ───────────── LAYOUT ROWS ───────────── */
+        .row-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 22px;
+        }
+        .row-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 22px;
+        }
+        @media (max-width: 1000px) {
+            .row-2,
+            .row-3 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ───────────── CHART ───────────── */
+        .chart-container {
+            height: 190px;
+            margin-top: 6px;
+        }
+        .chart-container-sm {
+            height: 150px;
+            margin-top: 4px;
+        }
+
+        /* ───────────── PLAN / ACTUAL COMPARE ───────────── */
+        .compare-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 4px 0;
+        }
+        .compare-bar .label {
+            width: 100px;
+            font-size: 0.78rem;
+            font-weight: 500;
+            flex-shrink: 0;
+        }
+        .compare-bar .track {
+            flex: 1;
+            height: 10px;
+            background: #e9edf2;
+            border-radius: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+        .compare-bar .track .fill-plan {
+            height: 100%;
+            background: #3b82f6;
+            border-radius: 20px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0.6;
+        }
+        .compare-bar .track .fill-actual {
+            height: 100%;
+            background: #22c55e;
+            border-radius: 20px;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .compare-bar .pct {
+            font-size: 0.75rem;
+            font-weight: 600;
+            width: 44px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        /* ───────────── FOOTER ───────────── */
+        .footer-note {
+            margin-top: 28px;
+            padding: 16px 24px;
+            background: #fff;
+            border-radius: 16px;
+            border: 1px solid #e9edf2;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            font-size: 0.78rem;
+            color: #475569;
+        }
+        .footer-note span i {
+            margin-right: 6px;
+            color: #64748b;
+        }
+
+        /* ───────────── MISC ───────────── */
+        .flex-between {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .gap-2 {
+            gap: 8px;
+        }
+        .mt-2 {
+            margin-top: 12px;
+        }
+        .mb-1 {
+            margin-bottom: 6px;
+        }
+        .fw-600 {
+            font-weight: 600;
         }
     </style>
 </head>
 <body>
-    <!-- Deposit/Withdraw/Rules Modals (same as before) -->
-    <div id="depositTypeModal" class="modal"><div class="modal-content"><div class="bank-header"><span class="bank-icon">🏦</span><div><div class="bank-title">Deposit</div><div class="bank-sub">Choose payment method</div></div></div><button class="type-btn" data-type="telebirr"><span>📱</span> Telebirr</button><button class="type-btn" data-type="cbebirr"><span>🏦</span> CBE Birr</button><button class="type-btn" data-type="mpesa"><span>📲</span> M-Pesa</button><button id="closeDepositTypeBtn" class="type-btn" style="background:#f1f5f9;">Cancel</button></div></div>
-    <div id="depositDetailsModal" class="modal"><div class="modal-content"><div class="bank-header"><span class="bank-icon">💸</span><div><div class="bank-title" id="depositDetailsTitle">Deposit via Telebirr</div><div class="bank-sub">Send payment & attach proof</div></div></div><div class="account-card"><div class="account-label">RECIPIENT ACCOUNT</div><div class="account-number" id="depositAccountNumber">0924839730</div><div class="account-label" style="margin-top:8px;">ACCOUNT NAME</div><div class="account-number" style="font-size:1rem;">DOT BINGO OFFICIAL</div></div><div class="input-group"><label>📞 Your Mobile Number</label><input type="tel" id="depositPlayerPhone" placeholder="" required></div><div class="input-group"><label>💰 Amount (ETB)</label><input type="number" id="depositAmount" placeholder="Min 10 ETB" min="10" step="any"></div><div class="input-group"><label>🧾 Transaction ID (optional)</label><input type="text" id="depositRef" placeholder="e.g., TRX123456"></div><div class="input-group"><label class="file-label" for="depositProofImage">📎 Attach Screenshot / Proof</label><input type="file" id="depositProofImage" accept="image/*" capture="environment" style="display:none;"></div><div class="transaction-summary">💡 After sending, submit proof. Funds added after manual verification.</div><div class="modal-buttons"><button id="submitDepositBtn" class="btn-primary">✔ Submit Request</button><button id="backDepositBtn" class="btn-secondary">← Back</button></div></div></div>
-    <div id="withdrawTypeModal" class="modal"><div class="modal-content"><div class="bank-header"><span class="bank-icon">💰</span><div><div class="bank-title">Withdraw Funds</div><div class="bank-sub">Select withdrawal method</div></div></div><button class="type-btn" data-type="telebirr"><span>📱</span> Telebirr</button><button class="type-btn" data-type="cbebirr"><span>🏦</span> CBE Birr</button><button class="type-btn" data-type="mpesa"><span>📲</span> M-Pesa </button><button id="closeWithdrawTypeBtn" class="type-btn">Cancel</button></div></div>
-    <div id="withdrawDetailsModal" class="modal"><div class="modal-content"><div class="bank-header"><span class="bank-icon">🏧</span><div><div class="bank-title" id="withdrawDetailsTitle">Withdraw via Telebirr</div><div class="bank-sub">Your account details</div></div></div><div class="input-group"><label>👤 Full Name (as per bank/mobile money)</label><input type="text" id="withdrawName" placeholder="Full name" required></div><div class="input-group"><label>📞 Account / Phone Number</label><input type="text" id="withdrawReceiver" placeholder="" required></div><div class="input-group"><label>💰 Amount (ETB) - Min 20 ETB</label><input type="number" id="withdrawAmount" placeholder="Amount" min="20" step="any"></div><div class="transaction-summary">⏱️ Withdrawals processed within 24h.</div><div class="modal-buttons"><button id="submitWithdrawBtn" class="btn-primary">✔ Request Withdrawal</button><button id="backWithdrawBtn" class="btn-secondary">← Back</button></div></div></div>
-    <div id="rulesModal" class="modal"><div class="modal-content"><div class="bank-header"><span class="bank-icon">📜</span><div><div class="bank-title">የቢንጎ ሕጎች</div><div class="bank-sub">75-ኳስ ክላሲክ</div></div></div><div class="rules-text" style="font-size:0.9rem; line-height:1.5;"><p><strong>💰 የመግቢያ ክፍያ፦</strong> በአንድ ካርድ 10 / 20 / 30 ብር (የመረጡት ጨዋታ)</p><p><strong>🏆 የሽልማት ገንዘብ፦</strong> ከጠቅላላ ክፍያ 80% (ለምሳሌ፦ 10 ተጫዋቾች 10ETB → 80 ብር ሽልማት)</p><p><strong>🎯 የማሸነፍ ሁኔታዎች፦</strong><br>• ማንኛውንም አግድም ረድፍ፣ ቀጥ ያለ ዓምድ፣ ወይም ዋና ዲያግናል መሙላት<br>• ወይም አራቱንም ማዕዘኖች (ላይ-ግራ፣ ላይ-ቀኝ፣ ታች-ግራ፣ ታች-ቀኝ) ማርክ ማድረግ</p><p><strong>⏱️ የይገባኛል ጥያቄ ሕግ፦</strong> ንድፍዎን ያጠናቀቀውን ቁጥር ተከትሎ ወዲያው “CLAIM BINGO!” ብለው መጫን አለብዎት።<br>❌ ዘግይቶ መጠየቅ (ቀጣዩ ቁጥር ከተጠራ በኋላ) የማይሠራ ነው።</p><p><strong>👥 በርካታ አሸናፊዎች፦</strong> ሽልማቱ በአንድ ቁጥር ላይ ቢንጎ ባገኙ ሁሉ በእኩል ይከፈላል።</p></div><div class="deposit-rules"><h4>💰 የተቀማጭ ሕጎች / Deposit Rules</h4><ul><li>📌 ዝቅተኛ ተቀማጭ መጠን፦ <strong>10 ብር</strong></li><li>💳 የክፍያ መንገዶች፦ <strong>Telebirr፣ CBE Birr፣ M-Pesa</strong></li><li>📲 ገንዘብ ከላኩ በኋላ <strong>“+Deposit”</strong> ቁልፍ በመጫን ቅጹን መሙላት አለብዎት</li><li>✅ ሲፀደቅ ገንዘብ በራስ-ሰር ይጨምራል</li></ul></div><button id="closeRulesBtn" class="btn-primary" style="width:100%; margin-top:16px;">ገባኝ</button></div></div>
-    <div id="winnerOverlay" class="winner-modal"><div class="winner-card"><div class="winner-trophy">🏆✨</div><div class="winner-title" id="winTitle">BINGO!</div><div class="winner-sub">Congratulations</div><div class="winners-avatars" id="winListContainer"></div><div class="prize-amount"><div class="prize-label">🎁 WINNING PRIZE</div><div class="prize-number" id="winPrize">0 <small>ETB</small></div></div><button class="celebrate-btn" onclick="document.getElementById('winnerOverlay').classList.remove('active');">🎉 Amazing! 🎉</button></div></div>
 
-    <!-- STAKE PAGE -->
-    <div id="stakePage" class="page">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;"><h2 style="font-family:'Inter', monospace; font-weight:800; color:#ea580c;">🎲 ዶት ቢንጎ</h2><div class="players-badge">DOT BINGO</div></div>
-        <div class="stake-balance-bar"><span>💰 My Balance</span><span class="stake-balance-amount" id="stakeBalance">0 ETB</span><div style="display: flex; gap: 6px;"><button id="stakeDepositBtn" style="background:#f97316; border:none; border-radius:40px; padding:6px 12px; color:white; font-weight:600; font-size:0.7rem;">+Deposit</button><button id="stakeWithdrawBtn" style="background:#334155; border:none; border-radius:40px; padding:6px 12px; color:white; font-weight:600; font-size:0.7rem;">-Withdraw</button></div></div>
-        <h3 style="text-align:center; margin:20px 0 10px;">Choose Your Stake</h3>
-        <div class="stake-page-buttons"><button id="stake10Btn" class="stake-option">10 ETB</button><button id="stake20Btn" class="stake-option">20 ETB</button><button id="stake30Btn" class="stake-option">30 ETB</button></div>
-        <div class="rules-text"><p><strong>💰 የመግቢያ ክፍያ፦</strong> 10 / 20 / 30 ብር</p><p><strong>🏆 የሽልማት ገንዘብ፦</strong> 80%</p><p><strong>🎯 ማሸነፍ፦</strong> ረድፍ፣ ዓምድ፣ ዲያግናል ወይም 4 ማዕዘኖች</p><p><strong>⏱️ ይገባኛል ጥያቄ፦</strong> ወዲያው “CLAIM BINGO!”</p></div>
-        <div class="telegram-links" style="margin-top:20px; text-align:center;">📢 Join our community:<br><a href="https://t.me/Dotbingogame" target="_blank">Dot Bingo help</a> | <a href="https://t.me/dotbingo" target="_blank">Dot Bingo channel</a></div>
-    </div>
+    <div class="container" id="app">
 
-    <!-- LOBBY PAGE -->
-    <div id="lobbyPage" class="page hidden">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;"><h2 style="font-weight:800; color:#ea580c;">🎲 DOT BINGO</h2><div class="players-badge">👥 <span id="playersCount">0</span></div></div>
-        <div class="balance-top">
-            <div style="font-weight:700;">💰 BAL <span id="lobbyBalance">0</span> ETB</div>
-            <div style="display:flex; gap:8px;">
-                <button id="depositBtn" style="background:#f97316; border:none; border-radius:40px; padding:6px 14px; color:white;">+Deposit</button>
-                <button id="withdrawBtn" style="background:#334155; border:none; border-radius:40px; padding:6px 14px; color:white;">-Withdraw</button>
-                <button id="backToStakeBtn" style="background:#6c757d; border:none; border-radius:40px; padding:6px 14px; color:white;">← Back</button>
-                <div class="voice-toggle"><span>🔊</span><label class="toggle-switch"><input type="checkbox" id="voiceToggle"><span class="slider"></span></label></div>
+        <!-- ════════ HEADER ════════ -->
+        <header class="header">
+            <h1><i class="fas fa-industry"></i> Bahir-Dar Factory</h1>
+            <div class="week-badge">
+                <i class="fas fa-calendar-alt"></i> Week 07–13 / 09 / 2017 ዓ.ም
+                <span style="margin-left:14px;background:#facc15;color:#0b2a4a;padding:2px 12px;border-radius:30px;font-size:0.7rem;font-weight:700;">
+                    <i class="fas fa-calendar-plus"></i> Plan 14–20
+                </span>
             </div>
-            <div class="timer-badge" id="lobbyTimer">30s</div>
+        </header>
+
+        <!-- ════════ STATS ════════ -->
+        <section class="stats-grid" id="statsGrid">
+            <div class="stat-card"><i class="fas fa-users icon"></i><div class="label">Operators</div><div class="value" id="totalOps">94</div><div class="sub">across 7 shops</div></div>
+            <div class="stat-card"><i class="fas fa-cogs icon"></i><div class="label">Machines</div><div class="value" id="totalMachines">147</div><div class="sub">5 categories</div></div>
+            <div class="stat-card"><i class="fas fa-clipboard-list icon"></i><div class="label">Projects</div><div class="value" id="totalProjects">18</div><div class="sub">active</div></div>
+            <div class="stat-card"><i class="fas fa-check-circle icon"></i><div class="label">Overall Perf.</div><div class="value" id="overallPerf">83%</div><div class="sub">qty · +2% vs plan</div></div>
+            <div class="stat-card"><i class="fas fa-clock icon"></i><div class="label">Machine Util.</div><div class="value" id="machineUtil">71%</div><div class="sub">planned vs actual</div></div>
+            <div class="stat-card"><i class="fas fa-flag icon"></i><div class="label">Plan Coverage</div><div class="value" id="planCoverage">92%</div><div class="sub">next week ready</div></div>
+        </section>
+
+        <!-- ════════ TAB NAV ════════ -->
+        <div class="sheet-tabs" id="sheetTabs">
+            <button class="sheet-tab active" data-sheet="op-report"><i class="fas fa-user-cog"></i> Operator Report</button>
+            <button class="sheet-tab" data-sheet="project-report"><i class="fas fa-project-diagram"></i> Project Report</button>
+            <button class="sheet-tab" data-sheet="machine-report"><i class="fas fa-microchip"></i> Machine Report</button>
+            <button class="sheet-tab" data-sheet="assembly-report"><i class="fas fa-tools"></i> Assembly Report</button>
+            <button class="sheet-tab" data-sheet="reason"><i class="fas fa-exclamation-triangle"></i> Reasons</button>
+            <button class="sheet-tab" data-sheet="op-plan"><i class="fas fa-calendar-plus"></i> Operator Plan <span class="badge-plan">14–20</span></button>
+            <button class="sheet-tab" data-sheet="project-plan"><i class="fas fa-calendar-plus"></i> Project Plan <span class="badge-plan">14–20</span></button>
+            <button class="sheet-tab" data-sheet="machine-plan"><i class="fas fa-calendar-plus"></i> Machine Plan <span class="badge-plan">14–20</span></button>
+            <button class="sheet-tab" data-sheet="assembly-plan"><i class="fas fa-calendar-plus"></i> Assembly Plan <span class="badge-plan">14–20</span></button>
         </div>
-        <div style="display:flex; justify-content:space-between; margin:12px 0;"><span>🎴 Pick card ID:</span><span>Selected: <span id="selectedNumber">-</span></span><button id="randomCardBtn" style="background:#ea580c; border:none; border-radius:40px; padding:6px 16px; color:white;">✨ Random Card</button></div>
-        <div id="numberGrid" class="grid-100"></div>
-        <div style="margin-top:8px;">🎴 Your Bingo Card Preview</div>
-        <div id="lobbyCardPreview" class="card-container"></div>
-        <div class="tab-bar"><button class="tab-btn active" data-page="lobby">🎮 Game</button><button class="tab-btn" data-page="history">📜 History</button><button class="tab-btn" data-page="wallet">💰 Wallet</button><button class="tab-btn" data-page="profile">👤 Profile</button></div>
-        <button id="rulesBtn" class="rules-btn">📜 Game Rules</button>
-        <div class="telegram-links">📢 Join our community:<br><a href="https://t.me/Dotbingogame" target="_blank" rel="noopener">Dot Bingo help</a> | <a href="https://t.me/dotbingo" target="_blank" rel="noopener">Dot Bingo channel</a></div>
-    </div>
 
-    <!-- HISTORY, WALLET, PROFILE -->
-    <div id="historyPage" class="page hidden"><div class="page-header"><h2>📜 Game History</h2><button class="back-btn" id="backFromHistoryBtn">← Back</button></div><div><strong>Total Games:</strong> <span id="totalGamesCount">0</span></div><div id="recentGamesList" class="recent-list" style="margin-top:16px;"></div></div>
-    <div id="walletPage" class="page hidden"><div class="page-header"><h2>💰 My Wallet</h2><button class="back-btn" id="backFromWalletBtn">← Back</button></div><div class="profile-stat"><div>Current Balance</div><div style="font-size:2rem;" id="walletBalancePage">0</div><button id="depositFromWalletBtn" class="btn-primary" style="margin-top:12px;">+ Deposit</button><button id="withdrawFromWalletBtn" class="btn-secondary" style="margin-top:8px;">- Withdraw</button></div></div>
-    <div id="profilePage" class="page hidden"><div class="page-header"><h2>👤 My Profile</h2><button class="back-btn" id="backFromProfileBtn">← Back</button></div><div class="profile-stat"><div>Username</div><div><strong id="profileUsername">Player</strong></div></div><div class="profile-stat"><div>💰 Balance</div><div id="profileBalancePage">0</div></div><div class="profile-stat"><div>🏆 Total Wins</div><div id="profileTotalWins">0</div></div><div class="profile-stat"><div>💵 Total Earned</div><div id="profileTotalEarned">0</div></div></div>
+        <!-- ════════ DYNAMIC CONTENT ════════ -->
+        <div id="sheetContent"></div>
 
-    <!-- GAME PAGE -->
-    <div id="gamePage" class="page hidden">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><h2 style="font-weight:800; color:#ea580c; font-size:1.4rem;">⚡ BINGO ARENA</h2><div class="players-badge">👥 <span id="gamePlayersCount">0</span></div></div>
-        <div class="game-top-bar"><div style="font-weight:600;">💰 <span id="gameBalanceDisplay">0</span> ETB</div><div style="display:flex; gap:6px;"><button onclick="openDepositTypeModal()" style="background:#f97316; border:none; border-radius:40px; padding:4px 12px; color:white; font-size:0.7rem;">+Deposit</button><button onclick="openWithdrawTypeModal()" style="background:#334155; border:none; border-radius:40px; padding:4px 12px; color:white; font-size:0.7rem;">-Withdraw</button><div class="voice-toggle"><span>🔊</span><label class="toggle-switch"><input type="checkbox" id="voiceToggleGame"><span class="slider"></span></label></div></div><button id="rulesBtnGame" style="background:#f1f5f9; color:#7c2d12; border:1px solid #fed7aa; border-radius:40px; padding:4px 12px; font-size:0.7rem;">📜 Rules</button></div>
-        <div class="prize-pool"><span>🏆 PRIZE POOL</span><div id="winningBalance">0 ETB</div></div>
-        <div class="last-call-area"><div class="last-call-label">🎲 LAST CALL</div><div class="last-call-number" id="currentCall">0 - 75</div><div class="called-history" id="calledList">Called: —</div></div>
-        <div id="gameCard" class="card-container"></div>
-        <button id="bingoBtn">🏆 CLAIM BINGO! 🏆</button>
-        <div class="tab-bar" style="margin-top: 20px;"><button class="tab-btn" data-page="lobby">🎮 Game</button><button class="tab-btn" data-page="history">📜 History</button><button class="tab-btn" data-page="wallet">💰 Wallet</button><button class="tab-btn" data-page="profile">👤 Profile</button></div>
+        <!-- ════════ FOOTER ════════ -->
+        <div class="footer-note">
+            <span><i class="fas fa-user"></i> Prepared by: Yitbarek B</span>
+            <span><i class="fas fa-check"></i> Checked by: Habtamu Ayizobel</span>
+            <span><i class="fas fa-stamp"></i> Approved by: Zemenu Tefera</span>
+            <span><i class="fas fa-calendar-day"></i> date: 00-00-00</span>
+        </div>
+
     </div>
 
     <script>
-        const tg = window.Telegram.WebApp;
-        tg.ready(); tg.expand();
-        let socket, userCard = [], markedNumbers = [], isGameActive = false, lobbyTimerInterval = null, selectedCardNumber = null;
-        let depositAccounts = {}, selectedDepositType = null, selectedWithdrawType = null;
-        let takenNumbers = new Set();
-        let currentBalance = 0;
-        let totalGames = 0, totalWins = 0, totalEarned = 0, recentGames = [], currentGameId = null;
-        let currentMainPage = 'lobby';
-        let currentGameStake = 10;
-        let currentRoomState = null;
-        let voiceEnabled = true;
-        let hasSelectedCard = false;
-        let returnToLobbyTimeout = null;
-        let currentCalledNumbers = []; // store called numbers for display
+        // ════════════════════════════════════════════════════════════
+        //  1.  DATA – mirrors the 9 Excel tabs
+        // ════════════════════════════════════════════════════════════
 
-        const amharicNumbers = { 1:"አንድ",2:"ሁለት",3:"ሶስት",4:"አራት",5:"አምስት",6:"ስድስት",7:"ሰባት",8:"ስምንት",9:"ዘጠኝ",10:"አስር",11:"አስራ አንድ",12:"አስራ ሁለት",13:"አስራ ሶስት",14:"አስራ አራት",15:"አስራ አምስት",16:"አስራ ስድስት",17:"አስራ ሰባት",18:"አስራ ስምንት",19:"አስራ ዘጠኝ",20:"ሃያ",21:"ሃያ አንድ",22:"ሃያ ሁለት",23:"ሃያ ሶስት",24:"ሃያ አራት",25:"ሃያ አምስት",26:"ሃያ ስድስት",27:"ሃያ ሰባት",28:"ሃያ ስምንት",29:"ሃያ ዘጠኝ",30:"ሰላሳ",31:"ሰላሳ አንድ",32:"ሰላሳ ሁለት",33:"ሰላሳ ሶስት",34:"ሰላሳ አራት",35:"ሰላሳ አምስት",36:"ሰላሳ ስድስት",37:"ሰላሳ ሰባት",38:"ሰላሳ ስምንት",39:"ሰላሳ ዘጠኝ",40:"አርባ",41:"አርባ አንድ",42:"አርባ ሁለት",43:"አርባ ሶስት",44:"አርባ አራት",45:"አርባ አምስት",46:"አርባ ስድስት",47:"አርባ ሰባት",48:"አርባ ስምንት",49:"አርባ ዘጠኝ",50:"ሃምሳ",51:"ሃምሳ አንድ",52:"ሃምሳ ሁለት",53:"ሃምሳ ሶስት",54:"ሃምሳ አራት",55:"ሃምሳ አምስት",56:"ሃምሳ ስድስት",57:"ሃምሳ ሰባት",58:"ሃምሳ ስምንት",59:"ሃምሳ ዘጠኝ",60:"ስልሳ",61:"ስልሳ አንድ",62:"ስልሳ ሁለት",63:"ስልሳ ሶስት",64:"ስልሳ አራት",65:"ስልሳ አምስት",66:"ስልሳ ስድስት",67:"ስልሳ ሰባት",68:"ስልሳ ስምንት",69:"ስልሳ ዘጠኝ",70:"ሰባ",71:"ሰባ አንድ",72:"ሰባ ሁለት",73:"ሰባ ሶስት",74:"ሰባ አራት",75:"ሰባ አምስት"};
-        function getAmharicLetter(letter) { const map = { 'B': 'ቢ', 'I': 'አይ', 'N': 'ኤን', 'G': 'ጂ', 'O': 'ኦ' }; return map[letter] || letter; }
-        function speakNumberAmharic(number) { if(!voiceEnabled)return; const letter=formatCall(number).split('-')[0]; const amharicLetter=getAmharicLetter(letter); const amharicNum=amharicNumbers[number]; if(!amharicNum)return; const phrase=`${amharicLetter} ${amharicNum}`; const utterance=new SpeechSynthesisUtterance(phrase); utterance.lang='am-ET'; utterance.rate=0.9; window.speechSynthesis.cancel(); window.speechSynthesis.speak(utterance); }
-        function initVoiceToggle() { const stored=localStorage.getItem('bingo_voice_enabled'); if(stored!==null) voiceEnabled=stored==='true'; const toggle=document.getElementById('voiceToggle'); const toggleGame=document.getElementById('voiceToggleGame'); if(toggle) toggle.checked=voiceEnabled; if(toggleGame) toggleGame.checked=voiceEnabled; const updateToggle=(e)=>{ voiceEnabled=e.target.checked; localStorage.setItem('bingo_voice_enabled',voiceEnabled); if(toggle&&toggle.checked!==voiceEnabled) toggle.checked=voiceEnabled; if(toggleGame&&toggleGame.checked!==voiceEnabled) toggleGame.checked=voiceEnabled; }; if(toggle) toggle.addEventListener('change',updateToggle); if(toggleGame) toggleGame.addEventListener('change',updateToggle); }
+        const SHOPS = ['Machine Shop', 'Fabrication Shop', 'Forging & Heat Treat', 'Welding Shop', 'Polishing', 'Painting',
+            'Assembly'
+        ];
 
-        function loadStats() { try { totalGames = parseInt(localStorage.getItem('dot_bingo_total_games') || '0'); totalWins = parseInt(localStorage.getItem('dot_bingo_total_wins') || '0'); totalEarned = parseInt(localStorage.getItem('dot_bingo_total_earned') || '0'); recentGames = JSON.parse(localStorage.getItem('dot_bingo_recent_games') || '[]'); } catch(e) {} updateStatsUI(); }
-        function saveStats() { localStorage.setItem('dot_bingo_total_games', totalGames); localStorage.setItem('dot_bingo_total_wins', totalWins); localStorage.setItem('dot_bingo_total_earned', totalEarned); localStorage.setItem('dot_bingo_recent_games', JSON.stringify(recentGames.slice(0, 10))); }
-        function updateStatsUI() { document.getElementById('totalGamesCount').innerText = totalGames; document.getElementById('profileTotalWins').innerText = totalWins; document.getElementById('profileTotalEarned').innerText = totalEarned; const recentDiv = document.getElementById('recentGamesList'); if (recentDiv) recentDiv.innerHTML = recentGames.length ? recentGames.map(g => `<div class="game-history-card"><div><strong>Game ${g.gameId}</strong> - ${g.date}</div><div class="stat-row"><span>Result:</span> <strong style="color:${g.result === 'Win' ? '#2e7d32' : '#c62828'}">${g.result}</strong></div><div class="stat-row"><span>Stake:</span> ${g.stake} ETB</div><div class="stat-row"><span>Prize:</span> ${g.prize} ETB</div><div class="stat-row"><span>Winners:</span> ${g.winners}</div></div>`).join('') : '<div class="game-history-card">No recent games</div>'; }
-        function addGameRecord(win, prize, gameId, cardCount, winnerCount) { totalGames++; if (win) { totalWins++; totalEarned += prize; } recentGames.unshift({ gameId, date: new Date().toLocaleString(), result: win ? 'Win' : 'Lost', stake: currentGameStake || 10, cards: cardCount, prize, winners: winnerCount }); if (recentGames.length > 10) recentGames.pop(); saveStats(); updateStatsUI(); }
+        // ─── Operators per shop (actual & plan share same names) ───
+        const OPERATORS = {
+            'Machine Shop': ['Yilikal Anteneh', 'Ayshshim Chalie', 'Tsegaye Chanie', 'Melkamu Yaregal',
+                'Dinkayehu Melese', 'Mulu Abebe', 'Birtukan Alamirew', 'Meseret Mulugieta',
+                'Solomon Alemu', 'Nahom Solomon', 'Getasew Dessie', 'Takele Mekie',
+                'Tilaye Aragew', 'Ayaliew Worku', 'Biniyam Misganaw', 'Habtamu Afewerk',
+                'Oumer Hasen', 'Awol Shiferaw', 'Getaneh Deml', 'Temesgen Alem',
+                'Werkagegnehu Shewaye', 'Kefialew Wedaje', 'Tesfanew Gizte', 'Wale Andualem'
+            ],
+            'Fabrication Shop': ['Abdela Endeshaw', 'Genet Siltan', 'Gojam Adamu', 'Astray Tsiga',
+                'Abayneh Tadese', 'Birhanu Kindu', 'Temesgen Nibret', 'Abrham Ayana',
+                'Getachew'
+            ],
+            'Forging & Heat Treat': ['H/Eyesus Abeje', 'Shumye Guadu'],
+            'Welding Shop': ['Abebaw Ager', 'Wubit Abera', 'Mesafint Afewerk', 'Belachew Tesfahun',
+                'Chalachew Amogne', 'Amlakie Semani', 'Adebabay Tawuneh', 'Yenatfanta Kassa',
+                'Amelmal Delelew', 'Netsanet Bazezew', 'Samrawit Mekonnen', 'Misganaw Tilahun',
+                'Mniyichil Tilahun', 'Molalgn Ayinie', 'Tarekegn Wubu', 'Yaregal Mengesha',
+                'Azmeraw Kebtie', 'Melaku Asimare', 'Yitayew Yilma', 'Bekalu Yaregal',
+                'Agumas Bishaw', 'Salamlak', 'Zerihun Dejen', 'Bekele Kassa',
+                'Birtukan Mola', 'Esey Alebachew', 'Zemenu Mola', 'Belete Siltanu',
+                'Hailye Yismaw', 'Metalgn Getu', 'Firehiwot T/Mariam', 'Zelalem Melkamu',
+                'Ejigu Bogale', 'Andualem Asresaw', 'Nigusu Bogale', 'Smegnew Alem',
+                'Zelalem Aweke', 'Wubshet Abe', 'Wasihun Fente'
+            ],
+            'Polishing': ['Antehunegn Asres', 'Metadel Gietu', 'Agumas Bishaw', 'Mulu Tesfa',
+                'Addisu Koye', 'Demelash', 'Nigusie', 'Yihenew Lakew', 'Minale Yechale'
+            ],
+            'Painting': ['Adisie Ewunetu', 'Adgo Baye', 'Zelalem Getnet', 'Yibeltal Dires', 'Yeshumnesh'],
+            'Assembly': ['Endalew Admasu', 'Zemenu Yohannes', 'Nigatu Dires', 'Yohannes Biazin',
+                'Birhanu Demlew', 'Temesgen Alem', 'Wale Andualem', 'Habtamu Manaye'
+            ]
+        };
 
-        const lobbyPage = document.getElementById('lobbyPage'), gamePage = document.getElementById('gamePage'), historyPage = document.getElementById('historyPage'), walletPage = document.getElementById('walletPage'), profilePage = document.getElementById('profilePage'), stakePage = document.getElementById('stakePage');
-        const lobbyTimerEl = document.getElementById('lobbyTimer'), playersCountEl = document.getElementById('playersCount'), lobbyBalanceEl = document.getElementById('lobbyBalance'), gamePlayersCountEl = document.getElementById('gamePlayersCount'), winningBalanceEl = document.getElementById('winningBalance'), currentCallEl = document.getElementById('currentCall'), calledListEl = document.getElementById('calledList'), selectedNumberEl = document.getElementById('selectedNumber'), numberGrid = document.getElementById('numberGrid'), lobbyCardPreview = document.getElementById('lobbyCardPreview');
-        function syncBalance(v) { currentBalance = v; lobbyBalanceEl.innerText = v; if(document.getElementById('walletBalancePage')) document.getElementById('walletBalancePage').innerText = v; if(document.getElementById('profileBalancePage')) document.getElementById('profileBalancePage').innerText = v; if(document.getElementById('gameBalanceDisplay')) document.getElementById('gameBalanceDisplay').innerText = v; if(document.getElementById('stakeBalance')) document.getElementById('stakeBalance').innerText = v + ' ETB'; }
-        function renderCard(card, containerId, clickable) { const cont = document.getElementById(containerId); if(!cont) return; cont.innerHTML = ''; const table = document.createElement('table'); table.style.borderCollapse='separate'; table.style.borderSpacing='10px'; const thead = document.createElement('thead'); const hr = document.createElement('tr'); ['B','I','N','G','O'].forEach(l=>{let th=document.createElement('th'); th.textContent=l; hr.appendChild(th);}); thead.appendChild(hr); table.appendChild(thead); const tbody = document.createElement('tbody'); for(let r=0;r<5;r++){ const tr=document.createElement('tr'); for(let c=0;c<5;c++){ const val=card[r][c]; const td=document.createElement('td'); td.textContent=val==='FREE'?'★':val; if(val==='FREE') td.classList.add('free'); if(markedNumbers.includes(val)) td.classList.add('marked'); if(clickable && val!=='FREE'){ td.style.cursor='pointer'; td.onclick=()=>{ if(isGameActive && socket) socket.emit('markNumber', { stake: currentGameStake, number: val }); };} tr.appendChild(td); } tbody.appendChild(tr); } table.appendChild(tbody); cont.appendChild(table); }
-        function buildNumberGrid() { numberGrid.innerHTML=''; for(let i=1;i<=100;i++){ const cell=document.createElement('div'); cell.className='grid-cell'; cell.dataset.number=i; cell.textContent=i; if(takenNumbers.has(i)) cell.classList.add('taken'); else cell.onclick=()=>{ if(!isGameActive && socket && !takenNumbers.has(i) && !hasSelectedCard) { socket.emit('selectCardNumber', { stake: currentGameStake, cardNumber: i }, (res) => { if (res && res.success) { hasSelectedCard = true; selectedCardNumber = i; selectedNumberEl.textContent = i; } else { alert(res.error || 'Failed to select card'); } }); } else if (hasSelectedCard) { alert('You already selected a card. Use "Random Card" to change.'); } }; numberGrid.appendChild(cell); } if(selectedCardNumber){ const sel=numberGrid.querySelector(`[data-number='${selectedCardNumber}']`); if(sel) sel.classList.add('selected'); } }
-        function updateGridWithTakenNumbers(nums){ takenNumbers=new Set(nums); buildNumberGrid(); }
-        function formatCall(n){ let l='B'; if(n>15) l='I'; if(n>30) l='N'; if(n>45) l='G'; if(n>60) l='O'; return `${l}-${n}`; }
-        function updateCalledHistory(calledNumbers) {
-            currentCalledNumbers = calledNumbers;
-            if (calledNumbers && calledNumbers.length) {
-                calledListEl.innerText = 'Called: ' + calledNumbers.map(n => formatCall(n)).join(', ');
-                currentCallEl.innerText = formatCall(calledNumbers[calledNumbers.length-1] || 0);
-            } else {
-                calledListEl.innerText = 'Called: —';
-                currentCallEl.innerText = '0 - 75';
+        // ─── Machines per category ───
+        const MACHINES = {
+            'Machine Shop': ['PH1', 'PH2', 'PH3', 'PH4', 'PH5', 'PH6', 'MDL1', 'MDL2', 'MDL3', 'MDL4',
+                'MDL5', 'MDL6', 'MDL7', 'MDL8', 'MDL9', 'MDL10', 'MDL11', 'CPL1', 'CPL2', 'CPL3',
+                'CPL4', 'CPL5', 'CPL6', 'CPL7', 'CPL8', 'CPL9', 'CPL10', 'CPL11', 'CHDPL1', 'CHDPL2',
+                'DCVTL1', 'DCVTL2', 'CUM1', 'CUM2', 'CUM3', 'CUM4', 'CUM5', 'CUM6', 'CUM7', 'CUM8',
+                'CUM9', 'CUM10', 'VMCM1', 'VMCM2', 'VMCM3', 'VMCM4', 'CNCUM5', 'CNCUM6', 'GH1',
+                'RD1', 'RD2', 'RD3', 'FD1', 'FD2', 'FD3', 'GD1', 'CNCVD1', 'SH1', 'HVS1', 'HVS2',
+                'SG1', 'SG2', 'SG3', 'CEG1', 'CEG2', 'CCIG1', 'CCIG2', 'C5AG1', 'UCG1', 'UCG2',
+                'PG1', 'PG2', 'PG3', 'PG4', 'PG5', 'VH1', 'CDHH1', 'CDHDB1', 'CDHD1', 'EDM1',
+                'EDM2', 'CWCEDM1', 'CWCEDM2'
+            ],
+            'Fabrication Shop': ['MS1', 'MS2', 'MS3', 'PS1', 'PS2', 'PS3', 'PS4', 'FS1', 'FS2', 'FS3',
+                'FS4', 'PG1', 'PG2', 'PG3', 'PG4', 'PG5', 'MB1', 'MB2', 'HB', 'PB1', 'PB2',
+                'R1', 'R2', 'R3', 'R4', 'SM1', 'SM2', 'HDHS1', 'HDHS2', 'HFRPR1', 'HTRPR1',
+                'HSMB1', 'HCSP1', 'HCSP2', 'APB1', 'APFB1', 'CHTP1'
+            ],
+            'Gas Cutting Shop': ['SGC', 'HGC1', 'HGC2', 'CNCGC1', 'CNCGC2', 'CNCGC3', 'MGC', 'PC1',
+                'PC2', 'PC3', 'PC4', 'PC5', 'PC6', 'PC7', 'CLC1', 'GTCPMC1', 'ATPHFC1', 'ATPHFC2'
+            ],
+            'Welding Shop': ['AW1', 'AW2', 'AW3', 'AW4', 'AW5', 'AW6', 'AW7', 'AW8', 'AW9', 'AW10',
+                'AW11', 'TW1', 'TW2', 'TW3', 'MW1', 'MW2', 'MW3', 'MW4', 'MW5', 'MW6',
+                'SMW1', 'SMW2', 'SMW3', 'PSW1', 'PSW2'
+            ],
+            'Forging & Heat Treat': ['HFM1', 'HFM2', 'PnFM1', 'PnFM2', 'PnFM3', 'HTM1', 'HTM2',
+                'HPM2000-1', 'HPM2000-2', 'HPM2000-3', 'HPM2000-4', 'HPM2000-5', 'HPM2000-6',
+                'HPM5000-1', 'HPM5000-2', 'HPM5000-3'
+            ]
+        };
+
+        // ─── Projects ───
+        const PROJECTS = [
+            { id: 'P1', name: 'Axle Housing', category: 'Customer' },
+            { id: 'P2', name: 'Gear Box', category: 'Customer' },
+            { id: 'P3', name: 'Flange Coupling', category: 'Customer' },
+            { id: 'P4', name: 'Pump Body', category: 'Customer' },
+            { id: 'P5', name: 'Valve Stem', category: 'Customer' },
+            { id: 'P6', name: 'Cylinder Head', category: 'Customer' },
+            { id: 'P7', name: 'Hydraulic Manifold', category: 'Customer' },
+            { id: 'P8', name: 'Spindle Shaft', category: 'Customer' },
+            { id: 'P9', name: 'Bearing Housing', category: 'Customer' },
+            { id: 'P10', name: 'Custom Gear', category: 'Our Own Service' },
+            { id: 'P11', name: 'Tool Post', category: 'Our Own Service' },
+            { id: 'P12', name: 'Fixture Base', category: 'Our Own Service' },
+        ];
+
+        // ─── Assembly parts ───
+        const ASSEMBLY_PARTS = ['Gearbox Housing', 'Pump Casing', 'Valve Body', 'Flange Assembly', 'Cylinder Head'];
+
+        // ─── Reasons / Issues ───
+        const REASONS = [
+            { problem: 'Lack of raw material', cause: 'Supply Chain', impact: 'High', solution: 'Expedite PO & local sourcing' },
+            { problem: 'Tool cutter breakage', cause: 'Maintenance', impact: 'Medium', solution: 'Preventive replacement schedule' },
+            { problem: 'Machine breakdown (Lathe #3)', cause: 'Mechanical', impact: 'High', solution: 'Overhaul & spare parts order' },
+            { problem: 'Design change request', cause: 'Engineering', impact: 'Low', solution: 'Update BOM & re-train operators' },
+            { problem: 'Operator absenteeism', cause: 'HR', impact: 'Medium', solution: 'Cross-training & backup plan' },
+        ];
+
+        // ─── Helper: random perf ───
+        function rand(min, max) { return Math.round(min + Math.random() * (max - min)); }
+
+        function randPerf() { return rand(65, 98); }
+
+        // ════════════════════════════════════════════════════════════
+        //  2.  RENDER FUNCTIONS  (each tab)
+        // ════════════════════════════════════════════════════════════
+
+        // ─── Operator Report (current week) ───
+        function renderOperatorReport() {
+            let html = `<div class="card"><h3><i class="fas fa-user-cog"></i> Operator Report · Current Week <span class="subtitle">07–13/09/17</span></h3>`;
+            for (const shop of SHOPS) {
+                const ops = OPERATORS[shop] || [];
+                if (!ops.length) continue;
+                html += `<div style="margin-top:14px;"><strong style="font-size:0.9rem;color:#1a4b6d;">${shop}</strong>
+                            <span class="text-muted" style="margin-left:8px;">${ops.length} operators</span>
+                            <div class="table-wrap" style="margin-top:6px;">
+                            <table>
+                            <thead><tr><th>Operator</th><th>Part</th><th>Planned Qty</th><th>Actual Qty</th><th>Perf %</th><th>Delay Reason</th></tr></thead><tbody>`;
+                const shown = ops.slice(0, 7);
+                for (const op of shown) {
+                    const perf = randPerf();
+                    const reasons = ['—', 'Sick', 'Material', 'Tool', 'Breakdown', 'Design', 'Permistion'];
+                    const r = reasons[rand(0, reasons.length - 1)];
+                    const color = perf >= 90 ? 'badge-green' : perf >= 70 ? 'badge-yellow' : 'badge-red';
+                    html += `<tr><td><strong>${op}</strong></td>
+                                <td>Part-${String.fromCharCode(65+rand(0,7))}</td>
+                                <td>${rand(15,70)}</td>
+                                <td>${rand(10,65)}</td>
+                                <td><span class="badge ${color}">${perf}%</span></td>
+                                <td>${r !== '—' ? `<span class="badge badge-blue">${r}</span>` : '—'}</td>
+                            </tr>`;
+                }
+                if (ops.length > 7) {
+                    html +=
+                        `<tr><td colspan="6" class="text-muted" style="text-align:center;">+ ${ops.length - 7} more operators</td></tr>`;
+                }
+                html += `</tbody></table></div></div>`;
             }
-        }
-        function startLobbyTimer(endTimeMs) { clearInterval(lobbyTimerInterval); const updateTimer = () => { const remaining = Math.max(0, Math.floor((endTimeMs - Date.now()) / 1000)); lobbyTimerEl.textContent = remaining + 's'; if (remaining <= 0) { clearInterval(lobbyTimerInterval); if (currentMainPage === 'lobby' && !isGameActive) showGame(); } }; updateTimer(); lobbyTimerInterval = setInterval(updateTimer, 1000); }
-        function showLobbyFromState(roomState) { 
-            currentMainPage = 'lobby'; 
-            stakePage.classList.add('hidden'); 
-            lobbyPage.classList.remove('hidden'); 
-            gamePage.classList.add('hidden'); 
-            historyPage.classList.add('hidden'); 
-            walletPage.classList.add('hidden'); 
-            profilePage.classList.add('hidden'); 
-            isGameActive = false; 
-            if (roomState) { 
-                playersCountEl.innerText = roomState.playersCount || 0; 
-                if (roomState.lobbyEndTime) startLobbyTimer(roomState.lobbyEndTime); 
-                if (roomState.takenNumbers) takenNumbers = new Set(roomState.takenNumbers); 
-                buildNumberGrid(); 
-            } 
-            updateStatsUI(); 
-        }
-        function showGame() { if (currentMainPage === 'game') return; currentMainPage = 'game'; lobbyPage.classList.add('hidden'); gamePage.classList.remove('hidden'); historyPage.classList.add('hidden'); walletPage.classList.add('hidden'); profilePage.classList.add('hidden'); isGameActive = true; clearInterval(lobbyTimerInterval); if (socket) socket.emit('getBalance'); if (userCard.length) renderCard(userCard, 'gameCard', true); }
-
-        async function loadDepositAccounts(){ try{ const res=await fetch('/api/deposit-accounts'); depositAccounts=await res.json(); }catch(e){} }
-        function openDepositTypeModal(){ document.getElementById('depositTypeModal').classList.add('active'); }
-        function closeDepositTypeModal(){ document.getElementById('depositTypeModal').classList.remove('active'); }
-        function openDepositDetailsModal(type){ selectedDepositType=type; let acc='',title='',hint=''; if(type==='telebirr'){ title='Telebirr'; acc=depositAccounts.telebirr||'0924839730'; hint='09xxxxxxxx'; } else if(type==='cbebirr'){ title='CBE Birr'; acc=depositAccounts.cbebirr||'1000123456789'; hint='09xxxxxxxx'; } else{ title='M-Pesa'; acc=depositAccounts.mpesa||'0712345678'; hint='07xxxxxxxx'; } document.getElementById('depositDetailsTitle').innerHTML=`Deposit via ${title}`; document.getElementById('depositAccountNumber').innerText=acc; document.getElementById('depositPlayerPhone').placeholder=hint; document.getElementById('depositPlayerPhone').value=''; document.getElementById('depositAmount').value=''; document.getElementById('depositRef').value=''; document.getElementById('depositProofImage').value=''; document.getElementById('depositDetailsModal').classList.add('active'); closeDepositTypeModal(); }
-        async function submitDepositWithProof(){ const phone=document.getElementById('depositPlayerPhone').value.trim(); const amount=document.getElementById('depositAmount').value.trim(); const file=document.getElementById('depositProofImage').files[0]; if(!phone.match(/^(09|07)\d{8}$/)) return alert('Invalid phone number'); if(!amount||isNaN(amount)||Number(amount)<10) return alert('Minimum deposit 10 ETB'); if(!file) return alert('Proof required'); const fd=new FormData(); fd.append('phone',phone); fd.append('amount',amount); fd.append('payment_type',selectedDepositType); fd.append('proof',file); await fetch('/api/request-deposit',{method:'POST',body:fd}); alert('Deposit request submitted!'); document.getElementById('depositDetailsModal').classList.remove('active'); }
-        function openWithdrawTypeModal(){ document.getElementById('withdrawTypeModal').classList.add('active'); }
-        function openWithdrawDetailsModal(type){ selectedWithdrawType=type; let title=type==='telebirr'?'Telebirr':type==='cbebirr'?'CBE Birr':'M-Pesa'; let hint=type==='mpesa'?'07xxxxxxxx':'09xxxxxxxx'; document.getElementById('withdrawDetailsTitle').innerHTML=`Withdraw via ${title}`; document.getElementById('withdrawReceiver').placeholder=hint; document.getElementById('withdrawReceiver').value=''; document.getElementById('withdrawAmount').value=''; document.getElementById('withdrawName').value=''; document.getElementById('withdrawDetailsModal').classList.add('active'); document.getElementById('withdrawTypeModal').classList.remove('active'); }
-        async function submitWithdrawRequest(){ const receiver=document.getElementById('withdrawReceiver').value.trim(); const amount=document.getElementById('withdrawAmount').value.trim(); const name=document.getElementById('withdrawName').value.trim(); if(!name) return alert("Full name required"); if(!amount||isNaN(amount)||Number(amount)<20) return alert('Min 20 ETB'); if(!receiver.match(/^(09|07)\d{8}$/)) return alert(`Invalid ${selectedWithdrawType} number`); await fetch('/api/request-withdraw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount,phone:receiver,withdrawal_type:selectedWithdrawType,name})}); alert('Withdrawal request submitted!'); document.getElementById('withdrawDetailsModal').classList.remove('active'); }
-        function showWinnerOverlay(data){ 
-            if(data.noWinner){ alert('No winner this round.'); return; } 
-            const prize = data.prizeEach || data.totalPrize || 0; 
-            const winnersArray = data.winners || [data.winner]; 
-            const title = winnersArray.length > 1 ? `${winnersArray.length} WINNERS!` : '🎉 BINGO! 🎉'; 
-            document.getElementById('winTitle').innerHTML = title; 
-            const container = document.getElementById('winListContainer'); 
-            container.innerHTML = winnersArray.map(w => `<span class="winner-badge">${w}</span>`).join(''); 
-            document.getElementById('winPrize').innerHTML = prize + ' <small>ETB</small>'; 
-            document.getElementById('winnerOverlay').classList.add('active'); 
-            const confDiv = document.createElement('div'); confDiv.className = 'confetti'; 
-            for(let i=0;i<120;i++){ let p=document.createElement('div'); p.className='confetti-piece'; p.style.left=Math.random()*100+'%'; p.style.animationDuration=(Math.random()*3+2)+'s'; p.style.backgroundColor=`hsl(${Math.random()*30 + 20}, 90%, 60%)`; p.style.width=Math.random()*8+4+'px'; p.style.height=Math.random()*12+6+'px'; confDiv.appendChild(p); } 
-            document.body.appendChild(confDiv); setTimeout(()=>confDiv.remove(),4000); 
-            if(currentGameId) addGameRecord(true, prize, currentGameId, 1, winnersArray.length); 
+            html += `</div>`;
+            return html;
         }
 
-        function returnToLobbyAfterGame() {
-            if (returnToLobbyTimeout) clearTimeout(returnToLobbyTimeout);
-            returnToLobbyTimeout = setTimeout(() => {
-                if (currentMainPage === 'game' && !isGameActive) {
-                    showLobbyFromState(currentRoomState);
+        // ─── Project Report (current week) ───
+        function renderProjectReport() {
+            let html = `<div class="card"><h3><i class="fas fa-project-diagram"></i> Project Report · Current Week <span class="subtitle">07–13/09/17</span></h3>
+                        <div class="table-wrap">
+                        <table>
+                        <thead><tr><th>Project</th><th>Category</th><th>Planned Qty</th><th>Actual Qty</th><th>Perf %</th><th>Up-to-date</th></tr></thead><tbody>`;
+            for (const p of PROJECTS) {
+                const planned = rand(20, 90);
+                const actual = Math.round(planned * (0.6 + Math.random() * 0.4));
+                const perf = Math.round((actual / planned) * 100);
+                const color = perf >= 90 ? 'badge-green' : perf >= 70 ? 'badge-yellow' : 'badge-red';
+                const status = perf >= 85 ? '✅ On Track' : perf >= 60 ? '⚠️ Behind' : '❌ Delayed';
+                html += `<tr><td><strong>${p.name}</strong></td>
+                            <td>${p.category}</td><td>${planned}</td><td>${actual}</td>
+                            <td><span class="badge ${color}">${perf}%</span></td>
+                            <td>${status}</td></tr>`;
+            }
+            html += `</tbody></table></div>
+                        <div style="margin-top:18px;"><canvas id="projectChartCurrent" height="90"></canvas></div>
+                        </div>`;
+            return html;
+        }
+
+        // ─── Machine Report (current week) ───
+        function renderMachineReport() {
+            let html = `<div class="card"><h3><i class="fas fa-microchip"></i> Machine Report · Current Week <span class="subtitle">07–13/09/17</span></h3>`;
+            for (const [cat, codes] of Object.entries(MACHINES)) {
+                const planned = rand(30, 70);
+                const actual = Math.round(planned * (0.5 + Math.random() * 0.5));
+                const util = Math.round((actual / planned) * 100);
+                const color = util >= 80 ? 'badge-green' : util >= 60 ? 'badge-yellow' : 'badge-red';
+                html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;">
+                            <span><strong>${cat}</strong> <span class="text-muted">(${codes.length} machines)</span></span>
+                            <span>${planned}h planned · ${actual}h actual</span>
+                            <span><span class="badge ${color}">${util}%</span></span>
+                        </div>`;
+            }
+            html += `</div>`;
+            return html;
+        }
+
+        // ─── Assembly Report ───
+        function renderAssemblyReport() {
+            let html = `<div class="card"><h3><i class="fas fa-tools"></i> Assembly Report · Current Week <span class="subtitle">07–13/09/17</span></h3>
+                        <div class="table-wrap">
+                        <table>
+                        <thead><tr><th>Part</th><th>Assembling</th><th>Polishing</th><th>Painting</th><th>Status</th></tr></thead><tbody>`;
+            for (const p of ASSEMBLY_PARTS) {
+                const asm = rand(55, 95);
+                const pol = rand(45, 90);
+                const pnt = rand(40, 85);
+                const avg = Math.round((asm + pol + pnt) / 3);
+                const color = avg >= 85 ? 'badge-green' : avg >= 65 ? 'badge-yellow' : 'badge-red';
+                const label = avg >= 85 ? 'Complete' : avg >= 65 ? 'In Progress' : 'Behind';
+                html += `<tr><td><strong>${p}</strong></td>
+                            <td>${asm}%</td><td>${pol}%</td><td>${pnt}%</td>
+                            <td><span class="badge ${color}">${label}</span></td></tr>`;
+            }
+            html += `</tbody></table></div></div>`;
+            return html;
+        }
+
+        // ─── Reasons ───
+        function renderReason() {
+            let html = `<div class="card"><h3><i class="fas fa-exclamation-triangle"></i> Problems · Impact · Solutions <span class="subtitle">07–13/09/17</span></h3>
+                        <div class="table-wrap">
+                        <table>
+                        <thead><tr><th>Problem</th><th>Root Cause</th><th>Impact</th><th>Solution</th></tr></thead><tbody>`;
+            for (const r of REASONS) {
+                const badge = r.impact === 'High' ? 'badge-red' : r.impact === 'Medium' ? 'badge-yellow' : 'badge-blue';
+                html += `<tr><td><strong>${r.problem}</strong></td>
+                            <td>${r.cause}</td>
+                            <td><span class="badge ${badge}">${r.impact}</span></td>
+                            <td>${r.solution}</td></tr>`;
+            }
+            html += `</tbody></table></div></div>`;
+            return html;
+        }
+
+        // ─── Operator PLAN (next week) ───
+        function renderOperatorPlan() {
+            let html = `<div class="card" style="border-left:4px solid #facc15;"><h3><i class="fas fa-calendar-plus" style="color:#facc15;"></i> Operator Plan · Next Week <span class="subtitle">14–20/09/17</span></h3>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">`;
+            for (const shop of SHOPS) {
+                const ops = OPERATORS[shop] || [];
+                if (!ops.length) continue;
+                html += `<div style="background:#f8fafc;border-radius:12px;padding:14px 16px;">
+                            <strong style="color:#1a4b6d;">${shop}</strong>
+                            <span class="text-muted" style="margin-left:8px;">${ops.length} operators</span>
+                            <div style="margin-top:8px;font-size:0.75rem;">`;
+                const planned = rand(20, 60);
+                const target = Math.round(planned * 1.15);
+                html += `<div class="compare-bar"><span class="label">Planned</span><div class="track"><div class="fill-plan" style="width:${planned}%;"></div></div><span class="pct">${planned}h</span></div>`;
+                html += `<div class="compare-bar"><span class="label">Target</span><div class="track"><div class="fill-actual" style="width:${target}%;"></div></div><span class="pct">${target}h</span></div>`;
+                html += `<div class="text-muted" style="margin-top:4px;">⬆ ${Math.round((target/planned-1)*100)}% increase vs current</div>`;
+                html += `</div></div>`;
+            }
+            html += `</div></div>`;
+            return html;
+        }
+
+        // ─── Project PLAN ───
+        function renderProjectPlan() {
+            let html = `<div class="card" style="border-left:4px solid #facc15;"><h3><i class="fas fa-calendar-plus" style="color:#facc15;"></i> Project Plan · Next Week <span class="subtitle">14–20/09/17</span></h3>
+                        <div class="table-wrap">
+                        <table>
+                        <thead><tr><th>Project</th><th>Category</th><th>Current Week</th><th>Next Week Plan</th><th>Growth</th></tr></thead><tbody>`;
+            for (const p of PROJECTS) {
+                const curr = rand(15, 70);
+                const next = Math.round(curr * (1 + (rand(5, 25) / 100)));
+                const grow = Math.round(((next - curr) / curr) * 100);
+                const color = grow > 10 ? 'badge-green' : grow > 0 ? 'badge-yellow' : 'badge-red';
+                html += `<tr><td><strong>${p.name}</strong></td>
+                            <td>${p.category}</td><td>${curr}</td><td>${next}</td>
+                            <td><span class="badge ${color}">${grow}%</span></td></tr>`;
+            }
+            html += `</tbody></table></div>
+                        <div style="margin-top:16px;"><canvas id="projectPlanChart" height="80"></canvas></div>
+                        </div>`;
+            return html;
+        }
+
+        // ─── Machine PLAN ───
+        function renderMachinePlan() {
+            let html = `<div class="card" style="border-left:4px solid #facc15;"><h3><i class="fas fa-calendar-plus" style="color:#facc15;"></i> Machine Plan · Next Week <span class="subtitle">14–20/09/17</span></h3>`;
+            for (const [cat, codes] of Object.entries(MACHINES)) {
+                const current = rand(25, 65);
+                const planned = Math.round(current * (1 + (rand(5, 20) / 100)));
+                const util = Math.round((planned / (current + 10)) * 100);
+                const color = util >= 80 ? 'badge-green' : util >= 60 ? 'badge-yellow' : 'badge-red';
+                html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;">
+                            <span><strong>${cat}</strong> <span class="text-muted">(${codes.length} machines)</span></span>
+                            <span>${current}h current → ${planned}h planned</span>
+                            <span><span class="badge ${color}">${util}%</span></span>
+                        </div>`;
+            }
+            html += `</div>`;
+            return html;
+        }
+
+        // ─── Assembly PLAN ───
+        function renderAssemblyPlan() {
+            let html = `<div class="card" style="border-left:4px solid #facc15;"><h3><i class="fas fa-calendar-plus" style="color:#facc15;"></i> Assembly Plan · Next Week <span class="subtitle">14–20/09/17</span></h3>
+                        <div class="table-wrap">
+                        <table>
+                        <thead><tr><th>Part</th><th>Current</th><th>Plan (Assembling)</th><th>Plan (Polishing)</th><th>Plan (Painting)</th><th>Target</th></tr></thead><tbody>`;
+            for (const p of ASSEMBLY_PARTS) {
+                const curr = rand(55, 85);
+                const asm = Math.min(100, curr + rand(5, 20));
+                const pol = Math.min(100, curr + rand(3, 15));
+                const pnt = Math.min(100, curr + rand(2, 12));
+                const avg = Math.round((asm + pol + pnt) / 3);
+                const color = avg >= 85 ? 'badge-green' : avg >= 65 ? 'badge-yellow' : 'badge-red';
+                html += `<tr><td><strong>${p}</strong></td>
+                            <td>${curr}%</td><td>${asm}%</td><td>${pol}%</td><td>${pnt}%</td>
+                            <td><span class="badge ${color}">${avg}%</span></td></tr>`;
+            }
+            html += `</tbody></table></div></div>`;
+            return html;
+        }
+
+        // ════════════════════════════════════════════════════════════
+        //  3.  NAVIGATION & RENDER
+        // ════════════════════════════════════════════════════════════
+
+        const contentEl = document.getElementById('sheetContent');
+        const tabs = document.querySelectorAll('.sheet-tab');
+
+        const renderMap = {
+            'op-report': renderOperatorReport,
+            'project-report': renderProjectReport,
+            'machine-report': renderMachineReport,
+            'assembly-report': renderAssemblyReport,
+            'reason': renderReason,
+            'op-plan': renderOperatorPlan,
+            'project-plan': renderProjectPlan,
+            'machine-plan': renderMachinePlan,
+            'assembly-plan': renderAssemblyPlan,
+        };
+
+        function renderSheet(sheet) {
+            tabs.forEach(t => t.classList.remove('active'));
+            document.querySelector(`.sheet-tab[data-sheet="${sheet}"]`)?.classList.add('active');
+
+            const fn = renderMap[sheet] || renderOperatorReport;
+            contentEl.innerHTML = fn();
+
+            // ─── Draw charts if present ───
+            setTimeout(() => {
+                // Project Report chart
+                const ctx1 = document.getElementById('projectChartCurrent');
+                if (ctx1) {
+                    new Chart(ctx1, {
+                        type: 'bar',
+                        data: {
+                            labels: PROJECTS.slice(0, 8).map(p => p.name.slice(0, 12)),
+                            datasets: [
+                                { label: 'Planned', data: PROJECTS.slice(0, 8).map(() => rand(20, 80)),
+                                    backgroundColor: 'rgba(37,99,235,0.6)', borderRadius: 4 },
+                                { label: 'Actual', data: PROJECTS.slice(0, 8).map(() => rand(15, 70)),
+                                    backgroundColor: 'rgba(16,185,129,0.6)', borderRadius: 4 }
+                            ]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false,
+                            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10 } } } },
+                            scales: { y: { beginAtZero: true } } }
+                    });
                 }
-            }, 5500);
+                // Project Plan chart
+                const ctx2 = document.getElementById('projectPlanChart');
+                if (ctx2) {
+                    new Chart(ctx2, {
+                        type: 'bar',
+                        data: {
+                            labels: PROJECTS.slice(0, 8).map(p => p.name.slice(0, 12)),
+                            datasets: [
+                                { label: 'Current', data: PROJECTS.slice(0, 8).map(() => rand(15, 60)),
+                                    backgroundColor: 'rgba(100,116,139,0.5)', borderRadius: 4 },
+                                { label: 'Next Week Plan', data: PROJECTS.slice(0, 8).map(() => rand(25, 80)),
+                                    backgroundColor: 'rgba(250,204,21,0.7)', borderRadius: 4 }
+                            ]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false,
+                            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10 } } } },
+                            scales: { y: { beginAtZero: true } } }
+                    });
+                }
+            }, 120);
         }
 
-        async function connect(){ 
-            const initData=tg.initData; 
-            if(!initData){ alert('Open inside Telegram'); return; } 
-            try{ 
-                const res=await fetch('/api/telegram-miniapp-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData})}); 
-                const data=await res.json(); 
-                if(!data.success){ alert('Auth failed'); return; } 
-                document.getElementById('profileUsername').innerText=data.username||'Player'; 
-                syncBalance(data.balance); 
-            }catch(e){ alert('Network error'); return; } 
-            socket=io(); 
-            socket.on('connect',()=>{ }); 
-            socket.on('balanceUpdate',syncBalance); 
-            socket.on('joinedRoom', (data) => { 
-                currentGameStake = data.stake; 
-                currentRoomState = data.roomState; 
-                if (data.card) {
-                    userCard = data.card;
-                    markedNumbers = data.markedNumbers || [];
-                    hasSelectedCard = true;
-                    // card number from card? we can infer but not needed for UI
-                }
-                if (data.calledNumbers) {
-                    updateCalledHistory(data.calledNumbers);
-                }
-                if (currentRoomState && currentRoomState.takenNumbers) takenNumbers = new Set(currentRoomState.takenNumbers); 
-                buildNumberGrid(); 
-                showLobbyFromState(currentRoomState);
-                if (userCard.length) {
-                    renderCard(userCard, 'lobbyCardPreview', false);
-                    if (currentRoomState && currentRoomState.status === 'running') {
-                        showGame();
-                        renderCard(userCard, 'gameCard', true);
-                        // Update prize pool and players count from currentRoomState
-                        if (currentRoomState.prizePool) winningBalanceEl.innerText = currentRoomState.prizePool;
-                        if (currentRoomState.playersCount) gamePlayersCountEl.innerText = currentRoomState.playersCount;
-                    }
-                }
-            }); 
-            socket.on('roomState', (state) => { 
-                currentRoomState = state; 
-                if (currentMainPage === 'lobby') { 
-                    playersCountEl.innerText = state.playersCount || 0; 
-                    if (state.lobbyEndTime) startLobbyTimer(state.lobbyEndTime); 
-                    if (state.status === 'running') {
-                        showGame();
-                        if (userCard.length) renderCard(userCard, 'gameCard', true);
-                    }
-                    if (state.takenNumbers) { takenNumbers = new Set(state.takenNumbers); buildNumberGrid(); } 
-                } else if (currentMainPage === 'game') { 
-                    gamePlayersCountEl.innerText = state.playersCount || 0; 
-                    if (state.prizePool) winningBalanceEl.innerText = state.prizePool;
-                } 
-                if (currentMainPage === 'lobby' && state.playersCount) { 
-                    const prize = Math.floor(state.playersCount * currentGameStake * 0.8); 
-                    winningBalanceEl.innerText = prize; 
-                } 
-            }); 
-            socket.on('yourCard', (card) => { 
-                userCard = card; 
-                if (isGameActive) renderCard(card, 'gameCard', true); 
-                else renderCard(card, 'lobbyCardPreview', false); 
-            }); 
-            socket.on('cardTaken', (data) => { 
-                if (data.takenNumbers) updateGridWithTakenNumbers(data.takenNumbers); 
-                selectedCardNumber = null; 
-                selectedNumberEl.textContent = '-'; 
-            }); 
-            socket.on('playersCount', (c) => { 
-                playersCountEl.innerText = c; 
-                if (gamePlayersCountEl) gamePlayersCountEl.innerText = c; 
-                const prize = Math.floor(c * currentGameStake * 0.8); 
-                winningBalanceEl.innerText = prize; 
-            }); 
-            socket.on('gameStarted', (data) => { 
-                if (data?.prizePool) winningBalanceEl.innerText = data.prizePool; 
-                if (data?.playersCount) gamePlayersCountEl.innerText = data.playersCount; 
-                showGame(); 
-                currentGameId = 'GAME_'+Date.now().toString(36).toUpperCase(); 
-            }); 
-            socket.on('numberCalled', (data) => { 
-                const number = data.number; 
-                updateCalledHistory(data.calledNumbers);
-                speakNumberAmharic(number);
-                // No auto-mark – player taps manually
-            }); 
-            socket.on('markedNumbers', (nums) => { 
-                markedNumbers = nums; 
-                if (isGameActive && userCard.length) renderCard(userCard, 'gameCard', true); 
-                else if (!isGameActive && userCard.length) renderCard(userCard, 'lobbyCardPreview', false); 
-            }); 
-            socket.on('gameEnded', (data) => { 
-                if (data.winningNumber) currentCallEl.innerText = formatCall(data.winningNumber); 
-                showWinnerOverlay(data); 
-                if (data.noWinner && currentGameId) addGameRecord(false,0,currentGameId,0,0); 
-                currentGameId = null; 
-                returnToLobbyAfterGame();
-            }); 
-            socket.on('invalidBingo', () => alert('❌ Not a valid bingo yet!')); 
-            socket.on('depositStatus', data => alert(data.status==='approved'?`✅ Deposit +${data.amount} ETB approved!`:'❌ Deposit rejected.')); 
-            socket.on('withdrawStatus', data => alert(data.status==='approved'?`✅ Withdrawal -${data.amount} ETB processed.`:'❌ Withdrawal rejected.')); 
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                renderSheet(tab.dataset.sheet);
+            });
+        });
+
+        // ─── Initial render ───
+        renderSheet('op-report');
+
+        // ─── Stats ───
+        function updateStats() {
+            const totalOps = Object.values(OPERATORS).reduce((s, a) => s + a.length, 0);
+            const totalMachines = Object.values(MACHINES).reduce((s, a) => s + a.length, 0);
+            document.getElementById('totalOps').textContent = totalOps;
+            document.getElementById('totalMachines').textContent = totalMachines;
+            document.getElementById('totalProjects').textContent = PROJECTS.length;
+            document.getElementById('overallPerf').textContent = rand(78, 92) + '%';
+            document.getElementById('machineUtil').textContent = rand(65, 80) + '%';
+            document.getElementById('planCoverage').textContent = rand(85, 96) + '%';
         }
+        updateStats();
 
-        function joinStake(stake) { if (!socket) { alert("Connecting... please wait"); return; } currentGameStake = stake; socket.emit('selectStake', { stake: stake }, (response) => { if (!response.success) alert(response.error || "Failed to join room"); }); }
-        function leaveRoom() { if (socket) { socket.emit('leaveRoom', (res) => { if (res && res.success) { stakePage.classList.remove('hidden'); lobbyPage.classList.add('hidden'); currentMainPage = 'stake'; userCard = []; markedNumbers = []; selectedCardNumber = null; hasSelectedCard = false; currentCalledNumbers = []; updateCalledHistory([]); clearInterval(lobbyTimerInterval); if (returnToLobbyTimeout) clearTimeout(returnToLobbyTimeout); } else { alert('Error leaving room'); } }); } }
+        console.log('🏭 Bahir-Dar Factory Dashboard loaded.');
+        console.log('📊 Tabs: op-report, project-report, machine-report, assembly-report, reason, op-plan, project-plan, machine-plan, assembly-plan');
+        console.log('📦 Data includes', Object.values(OPERATORS).reduce((a, b) => a + b.length, 0), 'operators and',
+            Object.values(MACHINES).reduce((a, b) => a + b.length, 0), 'machines');
 
-        document.getElementById('randomCardBtn')?.addEventListener('click',()=>{ if(!isGameActive && socket && hasSelectedCard) { const freeNumbers = []; for(let i=1;i<=100;i++) if(!takenNumbers.has(i)) freeNumbers.push(i); if(freeNumbers.length === 0) { alert('No free card numbers'); return; } const randomNum = freeNumbers[Math.floor(Math.random() * freeNumbers.length)]; socket.emit('selectCardNumber', { stake: currentGameStake, cardNumber: randomNum }, (res) => { if (res && res.success) { selectedCardNumber = randomNum; selectedNumberEl.textContent = randomNum; } else { alert(res.error || 'Failed to change card'); } }); } else if (!hasSelectedCard) { alert('First select a card number'); } });
-        document.getElementById('bingoBtn')?.addEventListener('click',()=>{ if(socket && isGameActive) socket.emit('claimBingo'); });
-        document.querySelectorAll('.tab-btn').forEach(btn=>{ btn.addEventListener('click',()=>{ const page=btn.getAttribute('data-page'); clearInterval(lobbyTimerInterval); if(page==='lobby'){ if(currentMainPage==='lobby') showLobbyFromState(currentRoomState); else showGame(); } else{ if(currentMainPage==='lobby') lobbyPage.classList.add('hidden'); else gamePage.classList.add('hidden'); if(page==='history') historyPage.classList.remove('hidden'); else if(page==='wallet'){ walletPage.classList.remove('hidden'); syncBalance(currentBalance); } else if(page==='profile'){ profilePage.classList.remove('hidden'); syncBalance(currentBalance); updateStatsUI(); } } }); });
-        document.getElementById('backFromHistoryBtn')?.addEventListener('click',() => goBackToMain());
-        document.getElementById('backFromWalletBtn')?.addEventListener('click',() => goBackToMain());
-        document.getElementById('backFromProfileBtn')?.addEventListener('click',() => goBackToMain());
-        document.getElementById('backToStakeBtn')?.addEventListener('click', () => leaveRoom());
-        function goBackToMain() { if (currentMainPage === 'lobby') showLobbyFromState(currentRoomState); else showGame(); }
-        document.getElementById('depositFromWalletBtn')?.addEventListener('click',openDepositTypeModal);
-        document.getElementById('withdrawFromWalletBtn')?.addEventListener('click',openWithdrawTypeModal);
-        document.getElementById('depositBtn')?.addEventListener('click',openDepositTypeModal);
-        document.getElementById('withdrawBtn')?.addEventListener('click',openWithdrawTypeModal);
-        document.getElementById('stakeDepositBtn')?.addEventListener('click',openDepositTypeModal);
-        document.getElementById('stakeWithdrawBtn')?.addEventListener('click',openWithdrawTypeModal);
-        document.querySelectorAll('#depositTypeModal .type-btn[data-type]').forEach(btn=>btn.addEventListener('click',()=>openDepositDetailsModal(btn.dataset.type)));
-        document.getElementById('closeDepositTypeBtn')?.addEventListener('click',closeDepositTypeModal);
-        document.getElementById('backDepositBtn')?.addEventListener('click',()=>{ document.getElementById('depositDetailsModal').classList.remove('active'); openDepositTypeModal(); });
-        document.getElementById('submitDepositBtn')?.addEventListener('click',submitDepositWithProof);
-        document.querySelectorAll('#withdrawTypeModal .type-btn[data-type]').forEach(btn=>btn.addEventListener('click',()=>openWithdrawDetailsModal(btn.dataset.type)));
-        document.getElementById('closeWithdrawTypeBtn')?.addEventListener('click',()=>document.getElementById('withdrawTypeModal').classList.remove('active'));
-        document.getElementById('backWithdrawBtn')?.addEventListener('click',()=>{ document.getElementById('withdrawDetailsModal').classList.remove('active'); openWithdrawTypeModal(); });
-        document.getElementById('submitWithdrawBtn')?.addEventListener('click',submitWithdrawRequest);
-        const rulesModal=document.getElementById('rulesModal'), closeRules=document.getElementById('closeRulesBtn');
-        document.getElementById('rulesBtn')?.addEventListener('click',()=>rulesModal.classList.add('active'));
-        document.getElementById('rulesBtnGame')?.addEventListener('click',()=>rulesModal.classList.add('active'));
-        closeRules?.addEventListener('click',()=>rulesModal.classList.remove('active'));
-        document.getElementById('stake10Btn')?.addEventListener('click', () => joinStake(10));
-        document.getElementById('stake20Btn')?.addEventListener('click', () => joinStake(20));
-        document.getElementById('stake30Btn')?.addEventListener('click', () => joinStake(30));
-        loadDepositAccounts(); loadStats(); connect(); initVoiceToggle(); stakePage.classList.remove('hidden');
+        // ════════════════════════════════════════════════════════════
+        //  4.  SQL SCHEMA  (printed to console)
+        // ════════════════════════════════════════════════════════════
+
+        console.log(`
+        ╔══════════════════════════════════════════════════════════════╗
+        ║               SQL SCHEMA  —  Bahir-Dar Factory             ║
+        ╚══════════════════════════════════════════════════════════════╝
+
+        -- 1. Shops
+        CREATE TABLE shops (
+            shop_id INT PRIMARY KEY AUTO_INCREMENT,
+            shop_name VARCHAR(100) NOT NULL UNIQUE,
+            shop_type VARCHAR(50)
+        );
+
+        -- 2. Operators
+        CREATE TABLE operators (
+            operator_id INT PRIMARY KEY AUTO_INCREMENT,
+            full_name VARCHAR(120) NOT NULL,
+            shop_id INT NOT NULL,
+            is_active BOOLEAN DEFAULT TRUE,
+            FOREIGN KEY (shop_id) REFERENCES shops(shop_id)
+        );
+
+        -- 3. Machines
+        CREATE TABLE machines (
+            machine_id INT PRIMARY KEY AUTO_INCREMENT,
+            machine_code VARCHAR(30) NOT NULL UNIQUE,
+            machine_name VARCHAR(120) NOT NULL,
+            shop_id INT NOT NULL,
+            category VARCHAR(60),
+            FOREIGN KEY (shop_id) REFERENCES shops(shop_id)
+        );
+
+        -- 4. Projects
+        CREATE TABLE projects (
+            project_id INT PRIMARY KEY AUTO_INCREMENT,
+            project_name VARCHAR(120) NOT NULL,
+            category VARCHAR(60),
+            is_active BOOLEAN DEFAULT TRUE
+        );
+
+        -- 5. Assembly Parts
+        CREATE TABLE assembly_parts (
+            part_id INT PRIMARY KEY AUTO_INCREMENT,
+            part_name VARCHAR(120) NOT NULL,
+            project_id INT,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id)
+        );
+
+        -- 6. Production Records (Operator performance)
+        CREATE TABLE production_records (
+            record_id INT PRIMARY KEY AUTO_INCREMENT,
+            operator_id INT NOT NULL,
+            shop_id INT NOT NULL,
+            week_start DATE NOT NULL,
+            week_end DATE NOT NULL,
+            planned_part VARCHAR(60),
+            planned_qty INT,
+            planned_time DECIMAL(10,2),
+            actual_part VARCHAR(60),
+            actual_qty INT,
+            actual_time DECIMAL(10,2),
+            performance_pct DECIMAL(5,2),
+            delay_reason VARCHAR(60),
+            sick_days INT DEFAULT 0,
+            permission_days INT DEFAULT 0,
+            lack_materials BOOLEAN DEFAULT FALSE,
+            lack_tool_cutter BOOLEAN DEFAULT FALSE,
+            design_problem BOOLEAN DEFAULT FALSE,
+            machine_breakdown BOOLEAN DEFAULT FALSE,
+            machine_sequence_issue BOOLEAN DEFAULT FALSE,
+            over_capacity BOOLEAN DEFAULT FALSE,
+            machine_occupied BOOLEAN DEFAULT FALSE,
+            own_problem BOOLEAN DEFAULT FALSE,
+            FOREIGN KEY (operator_id) REFERENCES operators(operator_id),
+            FOREIGN KEY (shop_id) REFERENCES shops(shop_id)
+        );
+
+        -- 7. Project Production
+        CREATE TABLE project_production (
+            prod_id INT PRIMARY KEY AUTO_INCREMENT,
+            project_id INT NOT NULL,
+            week_start DATE NOT NULL,
+            week_end DATE NOT NULL,
+            planned_qty INT,
+            planned_time DECIMAL(10,2),
+            actual_qty INT,
+            actual_time DECIMAL(10,2),
+            performance_pct DECIMAL(5,2),
+            upto_date_qty INT,
+            upto_date_time VARCHAR(60),
+            overall_perf_pct DECIMAL(5,2),
+            FOREIGN KEY (project_id) REFERENCES projects(project_id)
+        );
+
+        -- 8. Machine Time Registration
+        CREATE TABLE machine_time_reg (
+            reg_id INT PRIMARY KEY AUTO_INCREMENT,
+            machine_id INT NOT NULL,
+            week_start DATE NOT NULL,
+            week_end DATE NOT NULL,
+            planned_time DECIMAL(10,2),
+            actual_time DECIMAL(10,2),
+            utilization_pct DECIMAL(5,2),
+            remark VARCHAR(200),
+            FOREIGN KEY (machine_id) REFERENCES machines(machine_id)
+        );
+
+        -- 9. Assembly Records
+        CREATE TABLE assembly_records (
+            assembly_id INT PRIMARY KEY AUTO_INCREMENT,
+            part_id INT NOT NULL,
+            week_start DATE NOT NULL,
+            week_end DATE NOT NULL,
+            assembling_planned DECIMAL(5,2),
+            assembling_wip DECIMAL(5,2),
+            assembling_completed DECIMAL(5,2),
+            polishing_planned DECIMAL(5,2),
+            polishing_wip DECIMAL(5,2),
+            polishing_completed DECIMAL(5,2),
+            painting_planned DECIMAL(5,2),
+            painting_wip DECIMAL(5,2),
+            painting_completed DECIMAL(5,2),
+            upto_date_qty INT,
+            performance_pct DECIMAL(5,2),
+            FOREIGN KEY (part_id) REFERENCES assembly_parts(part_id)
+        );
+
+        -- 10. Issues / Reasons
+        CREATE TABLE issues (
+            issue_id INT PRIMARY KEY AUTO_INCREMENT,
+            week_start DATE NOT NULL,
+            week_end DATE NOT NULL,
+            problem TEXT NOT NULL,
+            root_cause VARCHAR(120),
+            impact_level VARCHAR(30),
+            solution TEXT,
+            affected_project_id INT,
+            FOREIGN KEY (affected_project_id) REFERENCES projects(project_id)
+        );
+
+        -- 11. Plans (next week) — links to current records
+        CREATE TABLE plans (
+            plan_id INT PRIMARY KEY AUTO_INCREMENT,
+            week_start DATE NOT NULL,
+            week_end DATE NOT NULL,
+            plan_type ENUM('operator','project','machine','assembly') NOT NULL,
+            reference_id INT NOT NULL,  -- operator_id / project_id / machine_id / part_id
+            planned_qty INT,
+            planned_time DECIMAL(10,2),
+            target_qty INT,
+            target_time DECIMAL(10,2),
+            growth_pct DECIMAL(5,2),
+            notes TEXT
+        );
+
+        -- Indexes for performance
+        CREATE INDEX idx_prod_week ON production_records(week_start, week_end);
+        CREATE INDEX idx_project_week ON project_production(week_start, week_end);
+        CREATE INDEX idx_machine_week ON machine_time_reg(week_start, week_end);
+        CREATE INDEX idx_assembly_week ON assembly_records(week_start, week_end);
+        CREATE INDEX idx_issues_week ON issues(week_start, week_end);
+        `);
     </script>
+
 </body>
 </html>
