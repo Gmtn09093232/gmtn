@@ -1,843 +1,906 @@
-require('dotenv').config();
+// server.js - Bahir-Dar Factory Production Management System
+// Backend API with SQLite database, all 9 tabs mapped to tables & relations
 
 const express = require('express');
-const http = require('http');
-const session = require('express-session');
-const crypto = require('crypto');
-const { Server } = require('socket.io');
-const { createClient } = require('@supabase/supabase-js');
+const sqlite3 = require('sqlite3').verbose();
+const cors = require('cors');
 const path = require('path');
-const multer = require('multer');
-const fs = require('fs');
-
-// ---------- Uploads setup ----------
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const unique = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, unique + path.extname(file.originalname));
-  }
-});
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
-
-// ---------- Supabase ----------
-console.log('Connecting to Supabase...');
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-(async () => {
-  const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
-  if (error) console.error('❌ Supabase error:', error.message);
-  else console.log('✅ Supabase connected');
-})();
 
 const app = express();
-app.set('trust proxy', 1);
-const server = http.createServer(app);
-const io = new Server(server);
+const PORT = process.env.PORT || 5000;
 
+// ─── Middleware ──────────────────────────────────────────────
+app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(uploadDir));
+app.use(express.static(path.join(__dirname, 'public')));
 
-const sessionMiddleware = session({
-  secret: process.env.SESSION_SECRET || 'bingo_mega_secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: true,
-    httpOnly: true,
-    sameSite: 'none'
+// ─── Database Setup ──────────────────────────────────────────
+const dbPath = path.join(__dirname, 'factory_data.db');
+const db = new sqlite3.Database(dbPath, (err) => {
+  if (err) {
+    console.error('❌ Database connection error:', err.message);
+  } else {
+    console.log('✅ Connected to SQLite database');
+    initializeDatabase();
+    seedDemoData();
   }
 });
-app.use(sessionMiddleware);
-io.use((socket, next) => sessionMiddleware(socket.request, {}, next));
 
-// ---------- Audit Logger ----------
-async function logAuditEvent({
-  eventType,
-  roomId = null,
-  userId = 'system',
-  ipAddress = null,
-  details = {}
-}) {
-  try {
-    const { error } = await supabase
-      .from('audit_logs')
-      .insert({
-        event_type: eventType,
-        room_id: roomId,
-        user_id: userId,
-        ip_address: ipAddress,
-        details
+// ─── Initialize Tables ──────────────────────────────────────
+function initializeDatabase() {
+  db.serialize(() => {
+    // 1. Shops
+    db.run(`
+      CREATE TABLE IF NOT EXISTS shops (
+        shop_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        shop_name TEXT NOT NULL UNIQUE,
+        shop_type TEXT
+      )
+    `);
+
+    // 2. Operators
+    db.run(`
+      CREATE TABLE IF NOT EXISTS operators (
+        operator_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        full_name TEXT NOT NULL,
+        shop_id INTEGER NOT NULL,
+        is_active BOOLEAN DEFAULT 1,
+        FOREIGN KEY (shop_id) REFERENCES shops(shop_id)
+      )
+    `);
+
+    // 3. Machines
+    db.run(`
+      CREATE TABLE IF NOT EXISTS machines (
+        machine_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        machine_code TEXT NOT NULL UNIQUE,
+        machine_name TEXT NOT NULL,
+        shop_id INTEGER NOT NULL,
+        category TEXT,
+        FOREIGN KEY (shop_id) REFERENCES shops(shop_id)
+      )
+    `);
+
+    // 4. Projects
+    db.run(`
+      CREATE TABLE IF NOT EXISTS projects (
+        project_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_name TEXT NOT NULL,
+        category TEXT,
+        is_active BOOLEAN DEFAULT 1
+      )
+    `);
+
+    // 5. Assembly Parts
+    db.run(`
+      CREATE TABLE IF NOT EXISTS assembly_parts (
+        part_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        part_name TEXT NOT NULL,
+        project_id INTEGER,
+        FOREIGN KEY (project_id) REFERENCES projects(project_id)
+      )
+    `);
+
+    // 6. Production Records (operator performance)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS production_records (
+        record_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        operator_id INTEGER NOT NULL,
+        shop_id INTEGER NOT NULL,
+        week_start TEXT NOT NULL,
+        week_end TEXT NOT NULL,
+        planned_part TEXT,
+        planned_qty INTEGER,
+        planned_time REAL,
+        actual_part TEXT,
+        actual_qty INTEGER,
+        actual_time REAL,
+        performance_pct REAL,
+        delay_reason TEXT,
+        sick_days INTEGER DEFAULT 0,
+        permission_days INTEGER DEFAULT 0,
+        lack_materials BOOLEAN DEFAULT 0,
+        lack_tool_cutter BOOLEAN DEFAULT 0,
+        design_problem BOOLEAN DEFAULT 0,
+        machine_breakdown BOOLEAN DEFAULT 0,
+        machine_sequence_issue BOOLEAN DEFAULT 0,
+        over_capacity BOOLEAN DEFAULT 0,
+        machine_occupied BOOLEAN DEFAULT 0,
+        own_problem BOOLEAN DEFAULT 0,
+        FOREIGN KEY (operator_id) REFERENCES operators(operator_id),
+        FOREIGN KEY (shop_id) REFERENCES shops(shop_id)
+      )
+    `);
+
+    // 7. Project Production
+    db.run(`
+      CREATE TABLE IF NOT EXISTS project_production (
+        prod_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        week_start TEXT NOT NULL,
+        week_end TEXT NOT NULL,
+        planned_qty INTEGER,
+        planned_time REAL,
+        actual_qty INTEGER,
+        actual_time REAL,
+        performance_pct REAL,
+        upto_date_qty INTEGER,
+        upto_date_time TEXT,
+        overall_perf_pct REAL,
+        FOREIGN KEY (project_id) REFERENCES projects(project_id)
+      )
+    `);
+
+    // 8. Machine Time Registration
+    db.run(`
+      CREATE TABLE IF NOT EXISTS machine_time_reg (
+        reg_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        machine_id INTEGER NOT NULL,
+        week_start TEXT NOT NULL,
+        week_end TEXT NOT NULL,
+        planned_time REAL,
+        actual_time REAL,
+        utilization_pct REAL,
+        remark TEXT,
+        FOREIGN KEY (machine_id) REFERENCES machines(machine_id)
+      )
+    `);
+
+    // 9. Assembly Records
+    db.run(`
+      CREATE TABLE IF NOT EXISTS assembly_records (
+        assembly_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        part_id INTEGER NOT NULL,
+        week_start TEXT NOT NULL,
+        week_end TEXT NOT NULL,
+        assembling_planned REAL,
+        assembling_wip REAL,
+        assembling_completed REAL,
+        polishing_planned REAL,
+        polishing_wip REAL,
+        polishing_completed REAL,
+        painting_planned REAL,
+        painting_wip REAL,
+        painting_completed REAL,
+        upto_date_qty INTEGER,
+        performance_pct REAL,
+        FOREIGN KEY (part_id) REFERENCES assembly_parts(part_id)
+      )
+    `);
+
+    // 10. Issues / Reasons
+    db.run(`
+      CREATE TABLE IF NOT EXISTS issues (
+        issue_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        week_start TEXT NOT NULL,
+        week_end TEXT NOT NULL,
+        problem TEXT NOT NULL,
+        root_cause TEXT,
+        impact_level TEXT,
+        solution TEXT,
+        affected_project_id INTEGER,
+        FOREIGN KEY (affected_project_id) REFERENCES projects(project_id)
+      )
+    `);
+
+    // 11. Plans (next week)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS plans (
+        plan_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        week_start TEXT NOT NULL,
+        week_end TEXT NOT NULL,
+        plan_type TEXT NOT NULL,
+        reference_id INTEGER NOT NULL,
+        planned_qty INTEGER,
+        planned_time REAL,
+        target_qty INTEGER,
+        target_time REAL,
+        growth_pct REAL,
+        notes TEXT
+      )
+    `);
+
+    // Indexes
+    db.run(`CREATE INDEX IF NOT EXISTS idx_prod_week ON production_records(week_start, week_end)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_project_week ON project_production(week_start, week_end)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_machine_week ON machine_time_reg(week_start, week_end)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_assembly_week ON assembly_records(week_start, week_end)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_issues_week ON issues(week_start, week_end)`);
+
+    console.log('📦 Database tables ready');
+  });
+}
+
+// ─── Seed Demo Data ──────────────────────────────────────────
+function seedDemoData() {
+  db.serialize(() => {
+    // Check if data exists
+    db.get('SELECT COUNT(*) as count FROM shops', (err, row) => {
+      if (err || row.count > 0) return;
+
+      const shops = [
+        'Machine Shop', 'Fabrication Shop', 'Forging & Heat Treat',
+        'Welding Shop', 'Polishing', 'Painting', 'Assembly'
+      ];
+      const shopIds = {};
+
+      // Insert shops
+      const stmtShop = db.prepare('INSERT INTO shops (shop_name) VALUES (?)');
+      shops.forEach(name => stmtShop.run(name));
+      stmtShop.finalize();
+
+      // Get shop IDs
+      shops.forEach((name, idx) => { shopIds[name] = idx + 1; });
+
+      // Operators
+      const operatorData = {
+        'Machine Shop': ['Yilikal Anteneh', 'Ayshshim Chalie', 'Tsegaye Chanie', 'Melkamu Yaregal',
+          'Dinkayehu Melese', 'Mulu Abebe', 'Birtukan Alamirew', 'Meseret Mulugieta',
+          'Solomon Alemu', 'Nahom Solomon', 'Getasew Dessie', 'Takele Mekie',
+          'Tilaye Aragew', 'Ayaliew Worku', 'Biniyam Misganaw', 'Habtamu Afewerk',
+          'Oumer Hasen', 'Awol Shiferaw', 'Getaneh Deml', 'Temesgen Alem',
+          'Werkagegnehu Shewaye', 'Kefialew Wedaje', 'Tesfanew Gizte', 'Wale Andualem'
+        ],
+        'Fabrication Shop': ['Abdela Endeshaw', 'Genet Siltan', 'Gojam Adamu', 'Astray Tsiga',
+          'Abayneh Tadese', 'Birhanu Kindu', 'Temesgen Nibret', 'Abrham Ayana', 'Getachew'
+        ],
+        'Forging & Heat Treat': ['H/Eyesus Abeje', 'Shumye Guadu'],
+        'Welding Shop': ['Abebaw Ager', 'Wubit Abera', 'Mesafint Afewerk', 'Belachew Tesfahun',
+          'Chalachew Amogne', 'Amlakie Semani', 'Adebabay Tawuneh', 'Yenatfanta Kassa',
+          'Amelmal Delelew', 'Netsanet Bazezew', 'Samrawit Mekonnen', 'Misganaw Tilahun',
+          'Mniyichil Tilahun', 'Molalgn Ayinie', 'Tarekegn Wubu', 'Yaregal Mengesha',
+          'Azmeraw Kebtie', 'Melaku Asimare', 'Yitayew Yilma', 'Bekalu Yaregal',
+          'Agumas Bishaw', 'Salamlak', 'Zerihun Dejen', 'Bekele Kassa',
+          'Birtukan Mola', 'Esey Alebachew', 'Zemenu Mola', 'Belete Siltanu',
+          'Hailye Yismaw', 'Metalgn Getu', 'Firehiwot T/Mariam', 'Zelalem Melkamu',
+          'Ejigu Bogale', 'Andualem Asresaw', 'Nigusu Bogale', 'Smegnew Alem',
+          'Zelalem Aweke', 'Wubshet Abe', 'Wasihun Fente'
+        ],
+        'Polishing': ['Antehunegn Asres', 'Metadel Gietu', 'Agumas Bishaw', 'Mulu Tesfa',
+          'Addisu Koye', 'Demelash', 'Nigusie', 'Yihenew Lakew', 'Minale Yechale'
+        ],
+        'Painting': ['Adisie Ewunetu', 'Adgo Baye', 'Zelalem Getnet', 'Yibeltal Dires', 'Yeshumnesh'],
+        'Assembly': ['Endalew Admasu', 'Zemenu Yohannes', 'Nigatu Dires', 'Yohannes Biazin',
+          'Birhanu Demlew', 'Temesgen Alem', 'Wale Andualem', 'Habtamu Manaye'
+        ]
+      };
+
+      const stmtOp = db.prepare('INSERT INTO operators (full_name, shop_id) VALUES (?, ?)');
+      for (const [shop, names] of Object.entries(operatorData)) {
+        const sid = shopIds[shop];
+        names.forEach(name => stmtOp.run(name, sid));
+      }
+      stmtOp.finalize();
+
+      // Machines
+      const machineData = {
+        'Machine Shop': ['PH1', 'PH2', 'PH3', 'PH4', 'PH5', 'PH6', 'MDL1', 'MDL2', 'MDL3', 'MDL4',
+          'MDL5', 'MDL6', 'MDL7', 'MDL8', 'MDL9', 'MDL10', 'MDL11', 'CPL1', 'CPL2', 'CPL3',
+          'CPL4', 'CPL5', 'CPL6', 'CPL7', 'CPL8', 'CPL9', 'CPL10', 'CPL11', 'CHDPL1', 'CHDPL2',
+          'DCVTL1', 'DCVTL2', 'CUM1', 'CUM2', 'CUM3', 'CUM4', 'CUM5', 'CUM6', 'CUM7', 'CUM8',
+          'CUM9', 'CUM10', 'VMCM1', 'VMCM2', 'VMCM3', 'VMCM4', 'CNCUM5', 'CNCUM6', 'GH1',
+          'RD1', 'RD2', 'RD3', 'FD1', 'FD2', 'FD3', 'GD1', 'CNCVD1', 'SH1', 'HVS1', 'HVS2',
+          'SG1', 'SG2', 'SG3', 'CEG1', 'CEG2', 'CCIG1', 'CCIG2', 'C5AG1', 'UCG1', 'UCG2',
+          'PG1', 'PG2', 'PG3', 'PG4', 'PG5', 'VH1', 'CDHH1', 'CDHDB1', 'CDHD1', 'EDM1',
+          'EDM2', 'CWCEDM1', 'CWCEDM2'
+        ],
+        'Fabrication Shop': ['MS1', 'MS2', 'MS3', 'PS1', 'PS2', 'PS3', 'PS4', 'FS1', 'FS2', 'FS3',
+          'FS4', 'PG1', 'PG2', 'PG3', 'PG4', 'PG5', 'MB1', 'MB2', 'HB', 'PB1', 'PB2',
+          'R1', 'R2', 'R3', 'R4', 'SM1', 'SM2', 'HDHS1', 'HDHS2', 'HFRPR1', 'HTRPR1',
+          'HSMB1', 'HCSP1', 'HCSP2', 'APB1', 'APFB1', 'CHTP1'
+        ],
+        'Gas Cutting Shop': ['SGC', 'HGC1', 'HGC2', 'CNCGC1', 'CNCGC2', 'CNCGC3', 'MGC', 'PC1',
+          'PC2', 'PC3', 'PC4', 'PC5', 'PC6', 'PC7', 'CLC1', 'GTCPMC1', 'ATPHFC1', 'ATPHFC2'
+        ],
+        'Welding Shop': ['AW1', 'AW2', 'AW3', 'AW4', 'AW5', 'AW6', 'AW7', 'AW8', 'AW9', 'AW10',
+          'AW11', 'TW1', 'TW2', 'TW3', 'MW1', 'MW2', 'MW3', 'MW4', 'MW5', 'MW6',
+          'SMW1', 'SMW2', 'SMW3', 'PSW1', 'PSW2'
+        ],
+        'Forging & Heat Treat': ['HFM1', 'HFM2', 'PnFM1', 'PnFM2', 'PnFM3', 'HTM1', 'HTM2',
+          'HPM2000-1', 'HPM2000-2', 'HPM2000-3', 'HPM2000-4', 'HPM2000-5', 'HPM2000-6',
+          'HPM5000-1', 'HPM5000-2', 'HPM5000-3'
+        ]
+      };
+
+      const stmtMac = db.prepare('INSERT INTO machines (machine_code, machine_name, shop_id) VALUES (?, ?, ?)');
+      for (const [shop, codes] of Object.entries(machineData)) {
+        const sid = shopIds[shop];
+        codes.forEach(code => stmtMac.run(code, code, sid));
+      }
+      stmtMac.finalize();
+
+      // Projects
+      const projects = [
+        { name: 'Axle Housing', category: 'Customer' },
+        { name: 'Gear Box', category: 'Customer' },
+        { name: 'Flange Coupling', category: 'Customer' },
+        { name: 'Pump Body', category: 'Customer' },
+        { name: 'Valve Stem', category: 'Customer' },
+        { name: 'Cylinder Head', category: 'Customer' },
+        { name: 'Hydraulic Manifold', category: 'Customer' },
+        { name: 'Spindle Shaft', category: 'Customer' },
+        { name: 'Bearing Housing', category: 'Customer' },
+        { name: 'Custom Gear', category: 'Our Own Service' },
+        { name: 'Tool Post', category: 'Our Own Service' },
+        { name: 'Fixture Base', category: 'Our Own Service' }
+      ];
+      const projIds = [];
+      const stmtProj = db.prepare('INSERT INTO projects (project_name, category) VALUES (?, ?)');
+      projects.forEach(p => { stmtProj.run(p.name, p.category); });
+      stmtProj.finalize();
+
+      // Get project IDs
+      db.all('SELECT project_id, project_name FROM projects', (err, rows) => {
+        if (err) return;
+        const map = {};
+        rows.forEach(r => map[r.project_name] = r.project_id);
+
+        // Assembly parts
+        const parts = ['Gearbox Housing', 'Pump Casing', 'Valve Body', 'Flange Assembly', 'Cylinder Head'];
+        const stmtPart = db.prepare('INSERT INTO assembly_parts (part_name, project_id) VALUES (?, ?)');
+        parts.forEach((name, idx) => {
+          const proj = projects[idx % projects.length];
+          stmtPart.run(name, map[proj.name] || 1);
+        });
+        stmtPart.finalize();
+
+        // Issues
+        const issues = [
+          { problem: 'Lack of raw material', cause: 'Supply Chain', impact: 'High',
+          solution: 'Expedite PO & local sourcing' },
+          { problem: 'Tool cutter breakage', cause: 'Maintenance', impact: 'Medium',
+          solution: 'Preventive replacement schedule' },
+          { problem: 'Machine breakdown (Lathe #3)', cause: 'Mechanical', impact: 'High',
+          solution: 'Overhaul & spare parts order' },
+          { problem: 'Design change request', cause: 'Engineering', impact: 'Low',
+          solution: 'Update BOM & re-train operators' },
+          { problem: 'Operator absenteeism', cause: 'HR', impact: 'Medium',
+          solution: 'Cross-training & backup plan' }
+        ];
+        const stmtIssue = db.prepare(
+          'INSERT INTO issues (week_start, week_end, problem, root_cause, impact_level, solution) VALUES (?, ?, ?, ?, ?, ?)'
+          );
+        const week = '2026-07-10';
+        issues.forEach(iss => {
+          stmtIssue.run(week, week, iss.problem, iss.cause, iss.impact, iss.solution);
+        });
+        stmtIssue.finalize();
       });
-    if (error) throw error;
-  } catch (err) {
-    console.error(`[AUDIT FAIL] ${eventType} (user ${userId}):`, err.message);
-  }
-}
 
-const Audit = {
-  depositInitiated(userId, ip, data) { return logAuditEvent({ eventType: 'DEPOSIT_INITIATED', userId, ipAddress: ip, details: data }); },
-  depositCompleted(userId, ip, data) { return logAuditEvent({ eventType: 'DEPOSIT_COMPLETED', userId, ipAddress: ip, details: data }); },
-  depositFailed(userId, ip, data) { return logAuditEvent({ eventType: 'DEPOSIT_FAILED', userId, ipAddress: ip, details: data }); },
-  withdrawalRequested(userId, ip, data) { return logAuditEvent({ eventType: 'WITHDRAWAL_REQUESTED', userId, ipAddress: ip, details: data }); },
-  withdrawalCompleted(userId, ip, data) { return logAuditEvent({ eventType: 'WITHDRAWAL_COMPLETED', userId, ipAddress: ip, details: data }); },
-  withdrawalRejected(userId, ip, data) { return logAuditEvent({ eventType: 'WITHDRAWAL_REJECTED', userId, ipAddress: ip, details: data }); },
-  bingoCalled(roomId, userId, ip, data) { return logAuditEvent({ eventType: 'BINGO_CALLED', roomId, userId, ipAddress: ip, details: data }); },
-  bingoRejected(roomId, userId, ip, data) { return logAuditEvent({ eventType: 'BINGO_REJECTED', roomId, userId, ipAddress: ip, details: data }); },
-  winPaidOut(roomId, userId, ip, data) { return logAuditEvent({ eventType: 'WIN_PAID_OUT', roomId, userId, ipAddress: ip, details: data }); },
-  numberDrawn(roomId, data) { return logAuditEvent({ eventType: 'NUMBER_DRAWN', roomId, details: data }); },
-  cardAssigned(roomId, userId, ip, data) { return logAuditEvent({ eventType: 'CARD_ASSIGNED', roomId, userId, ipAddress: ip, details: data }); },
-  adminAction(eventType, adminId, ip, details) { return logAuditEvent({ eventType, userId: adminId, ipAddress: ip, details }); },
-  suspicious(roomId, userId, ip, data) { return logAuditEvent({ eventType: 'SUSPICIOUS_BEHAVIOR_DETECTED', roomId, userId, ipAddress: ip, details: data }); }
-};
-
-// ---------- Suspicious Activity Detector ----------
-const winTimestamps = new Map();
-const WINDOW_MS = 120_000;
-const MAX_WINS_IN_WINDOW = 3;
-
-function detectRapidWins(roomId, userId, ip) {
-  if (!winTimestamps.has(userId)) winTimestamps.set(userId, []);
-  const times = winTimestamps.get(userId);
-  const now = Date.now();
-  times.push(now);
-  const recent = times.filter(t => now - t <= WINDOW_MS);
-  winTimestamps.set(userId, recent);
-  if (recent.length > MAX_WINS_IN_WINDOW) {
-    Audit.suspicious(roomId, userId, ip, {
-      detectionSource: 'win_velocity_check',
-      reason: `More than ${MAX_WINS_IN_WINDOW} wins in ${WINDOW_MS/1000}s`,
-      evidence: { recentWinCount: recent.length, windowMs: WINDOW_MS }
+      console.log('🌱 Demo data seeded');
     });
-    return true;
-  }
-  return false;
+  });
 }
 
-// ---------- Helper: Generate Bingo Card ----------
-function generateCard() {
-  const columns = [
-    [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
-    [16,17,18,19,20,21,22,23,24,25,26,27,28,29,30],
-    [31,32,33,34,35,36,37,38,39,40,41,42,43,44,45],
-    [46,47,48,49,50,51,52,53,54,55,56,57,58,59,60],
-    [61,62,63,64,65,66,67,68,69,70,71,72,73,74,75]
+// ─── Helper: random number ───────────────────────────────────
+function rand(min, max) { return Math.round(min + Math.random() * (max - min)); }
+
+// ─── API Routes ──────────────────────────────────────────────
+
+// ─── 1. Get all shops ────────────────────────────────────────
+app.get('/api/shops', (req, res) => {
+  db.all('SELECT * FROM shops ORDER BY shop_id', (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// ─── 2. Get operators with shop info ────────────────────────
+app.get('/api/operators', (req, res) => {
+  const shopFilter = req.query.shop_id;
+  let sql = `
+    SELECT o.*, s.shop_name 
+    FROM operators o 
+    JOIN shops s ON o.shop_id = s.shop_id
+  `;
+  if (shopFilter) sql += ` WHERE o.shop_id = ${parseInt(shopFilter)}`;
+  sql += ' ORDER BY o.full_name';
+  db.all(sql, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// ─── 3. Get machines with shop info ─────────────────────────
+app.get('/api/machines', (req, res) => {
+  const shopFilter = req.query.shop_id;
+  let sql = `
+    SELECT m.*, s.shop_name 
+    FROM machines m 
+    JOIN shops s ON m.shop_id = s.shop_id
+  `;
+  if (shopFilter) sql += ` WHERE m.shop_id = ${parseInt(shopFilter)}`;
+  sql += ' ORDER BY m.machine_code';
+  db.all(sql, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// ─── 4. Get projects ────────────────────────────────────────
+app.get('/api/projects', (req, res) => {
+  db.all('SELECT * FROM projects ORDER BY project_id', (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// ─── 5. Get assembly parts ──────────────────────────────────
+app.get('/api/assembly-parts', (req, res) => {
+  const sql = `
+    SELECT ap.*, p.project_name 
+    FROM assembly_parts ap 
+    LEFT JOIN projects p ON ap.project_id = p.project_id
+    ORDER BY ap.part_id
+  `;
+  db.all(sql, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// ─── 6. Production Records (operator performance) ──────────
+app.get('/api/production-records', (req, res) => {
+  const { week_start, week_end, shop_id, operator_id } = req.query;
+  let sql = `
+    SELECT pr.*, o.full_name, s.shop_name 
+    FROM production_records pr
+    JOIN operators o ON pr.operator_id = o.operator_id
+    JOIN shops s ON pr.shop_id = s.shop_id
+    WHERE 1=1
+  `;
+  const params = [];
+  if (week_start) { sql += ' AND pr.week_start = ?'; params.push(week_start); }
+  if (week_end) { sql += ' AND pr.week_end = ?'; params.push(week_end); }
+  if (shop_id) { sql += ' AND pr.shop_id = ?'; params.push(parseInt(shop_id)); }
+  if (operator_id) { sql += ' AND pr.operator_id = ?'; params.push(parseInt(operator_id)); }
+  sql += ' ORDER BY pr.record_id DESC LIMIT 200';
+
+  db.all(sql, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// ─── 7. Create / Update production record ──────────────────
+app.post('/api/production-records', (req, res) => {
+  const data = req.body;
+  const sql = `
+    INSERT INTO production_records (
+      operator_id, shop_id, week_start, week_end,
+      planned_part, planned_qty, planned_time,
+      actual_part, actual_qty, actual_time,
+      performance_pct, delay_reason,
+      sick_days, permission_days,
+      lack_materials, lack_tool_cutter, design_problem,
+      machine_breakdown, machine_sequence_issue,
+      over_capacity, machine_occupied, own_problem
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+  const params = [
+    data.operator_id, data.shop_id, data.week_start, data.week_end,
+    data.planned_part, data.planned_qty, data.planned_time,
+    data.actual_part, data.actual_qty, data.actual_time,
+    data.performance_pct, data.delay_reason,
+    data.sick_days || 0, data.permission_days || 0,
+    data.lack_materials || 0, data.lack_tool_cutter || 0, data.design_problem || 0,
+    data.machine_breakdown || 0, data.machine_sequence_issue || 0,
+    data.over_capacity || 0, data.machine_occupied || 0, data.own_problem || 0
   ];
-  const card = [];
-  for (let col = 0; col < 5; col++) {
-    const colNumbers = [];
-    const available = [...columns[col]];
-    for (let row = 0; row < 5; row++) {
-      if (col === 2 && row === 2) { colNumbers.push('FREE'); }
-      else { colNumbers.push(available.splice(Math.floor(Math.random() * available.length), 1)[0]); }
-    }
-    card.push(colNumbers);
-  }
-  const transposed = [];
-  for (let r = 0; r < 5; r++) transposed.push([card[0][r], card[1][r], card[2][r], card[3][r], card[4][r]]);
-  return transposed;
-}
+  db.run(sql, params, function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ record_id: this.lastID, ...data });
+  });
+});
 
-// ---------- GameRoom Class (delayed fee deduction) ----------
-class GameRoom {
-  constructor(stake, io) {
-    this.stake = stake;
-    this.io = io;
-    this.status = 'lobby';
-    this.pendingPlayers = new Map();
-    this.players = [];
-    this.takenCardNumbers = new Set();
-    this.calledNumbers = [];
-    this.entryFee = stake;
-    this.prizePool = 0;
-    this.lobbyTimer = null;
-    this.callInterval = null;
-    this.lobbyEndTime = 0;
-    this.cardSet = Array.from({ length: 100 }, () => generateCard());
-    this.winners = [];
-    this.bingoGraceTimeout = null;
-    this.winningNumber = null;
-    this.resetGame();
-  }
+// ─── 8. Project Production ──────────────────────────────────
+app.get('/api/project-production', (req, res) => {
+  const { week_start, week_end, project_id } = req.query;
+  let sql = `
+    SELECT pp.*, p.project_name, p.category
+    FROM project_production pp
+    JOIN projects p ON pp.project_id = p.project_id
+    WHERE 1=1
+  `;
+  const params = [];
+  if (week_start) { sql += ' AND pp.week_start = ?'; params.push(week_start); }
+  if (week_end) { sql += ' AND pp.week_end = ?'; params.push(week_end); }
+  if (project_id) { sql += ' AND pp.project_id = ?'; params.push(parseInt(project_id)); }
+  sql += ' ORDER BY pp.prod_id DESC';
 
-  getRoomId() {
-    return `stake_${this.stake}`;
-  }
+  db.all(sql, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
 
-  resetGame() {
-    this.status = 'lobby';
-    this.pendingPlayers.clear();
-    this.players = [];
-    this.takenCardNumbers.clear();
-    this.calledNumbers = [];
-    this.prizePool = 0;
-    this.winners = [];
-    this.winningNumber = null;
-    if (this.callInterval) clearInterval(this.callInterval);
-    if (this.bingoGraceTimeout) clearTimeout(this.bingoGraceTimeout);
-    this.bingoGraceTimeout = null;
-    this.cardSet = Array.from({ length: 100 }, () => generateCard());
-    this.lobbyEndTime = Date.now() + 30000;
-    if (this.lobbyTimer) clearTimeout(this.lobbyTimer);
-    this.lobbyTimer = setTimeout(() => this.startGame(), 30000);
-    this.broadcastState();
-  }
+app.post('/api/project-production', (req, res) => {
+  const data = req.body;
+  const sql = `
+    INSERT INTO project_production (
+      project_id, week_start, week_end,
+      planned_qty, planned_time, actual_qty, actual_time,
+      performance_pct, upto_date_qty, upto_date_time, overall_perf_pct
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+  const params = [
+    data.project_id, data.week_start, data.week_end,
+    data.planned_qty, data.planned_time, data.actual_qty, data.actual_time,
+    data.performance_pct, data.upto_date_qty, data.upto_date_time, data.overall_perf_pct
+  ];
+  db.run(sql, params, function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ prod_id: this.lastID, ...data });
+  });
+});
 
-  broadcastState() {
-    const state = this.getPublicState();
-    this.io.to(this.getRoomId()).emit('roomState', state);
-  }
+// ─── 9. Machine Time Registration ───────────────────────────
+app.get('/api/machine-time', (req, res) => {
+  const { week_start, week_end, machine_id } = req.query;
+  let sql = `
+    SELECT mtr.*, m.machine_code, m.machine_name, s.shop_name
+    FROM machine_time_reg mtr
+    JOIN machines m ON mtr.machine_id = m.machine_id
+    JOIN shops s ON m.shop_id = s.shop_id
+    WHERE 1=1
+  `;
+  const params = [];
+  if (week_start) { sql += ' AND mtr.week_start = ?'; params.push(week_start); }
+  if (week_end) { sql += ' AND mtr.week_end = ?'; params.push(week_end); }
+  if (machine_id) { sql += ' AND mtr.machine_id = ?'; params.push(parseInt(machine_id)); }
+  sql += ' ORDER BY mtr.reg_id DESC';
 
-  getPublicState() {
-    return {
-      stake: this.stake,
-      status: this.status,
-      playersCount: this.players.length,
-      pendingCount: this.pendingPlayers.size,
-      lobbyEndTime: this.lobbyEndTime,
-      prizePool: this.prizePool,
-      calledNumbersCount: this.calledNumbers.length,
-      winners: this.winners.map(w => ({ username: w.username, telegramId: w.telegramId })),
-      takenNumbers: Array.from(this.takenCardNumbers),
-      calledNumbers: this.calledNumbers
-    };
-  }
+  db.all(sql, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
 
-  static getAllRoomsPublicState(rooms) {
-    const state = {};
-    for (const [stake, room] of Object.entries(rooms)) {
-      state[stake] = room.getPublicState();
-    }
-    return state;
-  }
+app.post('/api/machine-time', (req, res) => {
+  const data = req.body;
+  const sql = `
+    INSERT INTO machine_time_reg (
+      machine_id, week_start, week_end,
+      planned_time, actual_time, utilization_pct, remark
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `;
+  const params = [
+    data.machine_id, data.week_start, data.week_end,
+    data.planned_time, data.actual_time, data.utilization_pct, data.remark
+  ];
+  db.run(sql, params, function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ reg_id: this.lastID, ...data });
+  });
+});
 
-  async addPendingPlayer(telegramId, username, ip) {
-    if (this.status !== 'lobby') throw new Error('Game already started or ended');
-    if (this.players.find(p => p.telegramId === telegramId) || this.pendingPlayers.has(telegramId)) {
-      throw new Error('Already in this room');
-    }
-    this.pendingPlayers.set(telegramId, { username, ip });
-    const socket = await getSocketByUserId(telegramId);
-    if (socket) {
-      socket.join(this.getRoomId());
-      socket.emit('joinedRoom', {
-        stake: this.stake,
-        roomState: this.getPublicState(),
-        calledNumbers: this.calledNumbers
+// ─── 10. Assembly Records ──────────────────────────────────
+app.get('/api/assembly-records', (req, res) => {
+  const { week_start, week_end, part_id } = req.query;
+  let sql = `
+    SELECT ar.*, ap.part_name, p.project_name
+    FROM assembly_records ar
+    JOIN assembly_parts ap ON ar.part_id = ap.part_id
+    LEFT JOIN projects p ON ap.project_id = p.project_id
+    WHERE 1=1
+  `;
+  const params = [];
+  if (week_start) { sql += ' AND ar.week_start = ?'; params.push(week_start); }
+  if (week_end) { sql += ' AND ar.week_end = ?'; params.push(week_end); }
+  if (part_id) { sql += ' AND ar.part_id = ?'; params.push(parseInt(part_id)); }
+  sql += ' ORDER BY ar.assembly_id DESC';
+
+  db.all(sql, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/assembly-records', (req, res) => {
+  const data = req.body;
+  const sql = `
+    INSERT INTO assembly_records (
+      part_id, week_start, week_end,
+      assembling_planned, assembling_wip, assembling_completed,
+      polishing_planned, polishing_wip, polishing_completed,
+      painting_planned, painting_wip, painting_completed,
+      upto_date_qty, performance_pct
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+  const params = [
+    data.part_id, data.week_start, data.week_end,
+    data.assembling_planned, data.assembling_wip, data.assembling_completed,
+    data.polishing_planned, data.polishing_wip, data.polishing_completed,
+    data.painting_planned, data.painting_wip, data.painting_completed,
+    data.upto_date_qty, data.performance_pct
+  ];
+  db.run(sql, params, function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ assembly_id: this.lastID, ...data });
+  });
+});
+
+// ─── 11. Issues / Reasons ──────────────────────────────────
+app.get('/api/issues', (req, res) => {
+  const { week_start, week_end } = req.query;
+  let sql = `
+    SELECT i.*, p.project_name
+    FROM issues i
+    LEFT JOIN projects p ON i.affected_project_id = p.project_id
+    WHERE 1=1
+  `;
+  const params = [];
+  if (week_start) { sql += ' AND i.week_start = ?'; params.push(week_start); }
+  if (week_end) { sql += ' AND i.week_end = ?'; params.push(week_end); }
+  sql += ' ORDER BY i.issue_id DESC';
+
+  db.all(sql, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/issues', (req, res) => {
+  const data = req.body;
+  const sql = `
+    INSERT INTO issues (week_start, week_end, problem, root_cause, impact_level, solution, affected_project_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `;
+  const params = [
+    data.week_start, data.week_end, data.problem,
+    data.root_cause, data.impact_level, data.solution, data.affected_project_id
+  ];
+  db.run(sql, params, function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ issue_id: this.lastID, ...data });
+  });
+});
+
+// ─── 12. Plans (next week) ──────────────────────────────────
+app.get('/api/plans', (req, res) => {
+  const { week_start, week_end, plan_type, reference_id } = req.query;
+  let sql = 'SELECT * FROM plans WHERE 1=1';
+  const params = [];
+  if (week_start) { sql += ' AND week_start = ?'; params.push(week_start); }
+  if (week_end) { sql += ' AND week_end = ?'; params.push(week_end); }
+  if (plan_type) { sql += ' AND plan_type = ?'; params.push(plan_type); }
+  if (reference_id) { sql += ' AND reference_id = ?'; params.push(parseInt(reference_id)); }
+  sql += ' ORDER BY plan_id DESC';
+
+  db.all(sql, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/plans', (req, res) => {
+  const data = req.body;
+  const sql = `
+    INSERT INTO plans (
+      week_start, week_end, plan_type, reference_id,
+      planned_qty, planned_time, target_qty, target_time,
+      growth_pct, notes
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+  const params = [
+    data.week_start, data.week_end, data.plan_type, data.reference_id,
+    data.planned_qty, data.planned_time, data.target_qty, data.target_time,
+    data.growth_pct, data.notes
+  ];
+  db.run(sql, params, function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ plan_id: this.lastID, ...data });
+  });
+});
+
+// ─── 13. Dashboard summary stats ────────────────────────────
+app.get('/api/dashboard/stats', (req, res) => {
+  const weekStart = req.query.week_start || '2026-07-10';
+  const weekEnd = req.query.week_end || '2026-07-10';
+
+  const stats = {};
+
+  // Total operators
+  db.get('SELECT COUNT(*) as total FROM operators WHERE is_active = 1', (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    stats.totalOperators = row.total;
+
+    // Total machines
+    db.get('SELECT COUNT(*) as total FROM machines', (err, row2) => {
+      if (err) return res.status(500).json({ error: err.message });
+      stats.totalMachines = row2.total;
+
+      // Total projects
+      db.get('SELECT COUNT(*) as total FROM projects WHERE is_active = 1', (err, row3) => {
+        if (err) return res.status(500).json({ error: err.message });
+        stats.totalProjects = row3.total;
+
+        // Avg performance from production records
+        db.get(
+          'SELECT AVG(performance_pct) as avgPerf FROM production_records WHERE week_start = ? AND week_end = ?',
+          [weekStart, weekEnd],
+          (err, row4) => {
+            if (err) return res.status(500).json({ error: err.message });
+            stats.avgPerformance = row4.avgPerf ? Math.round(row4.avgPerf) : 83;
+
+            // Machine utilization
+            db.get(
+              'SELECT AVG(utilization_pct) as avgUtil FROM machine_time_reg WHERE week_start = ? AND week_end = ?',
+              [weekStart, weekEnd],
+              (err, row5) => {
+                if (err) return res.status(500).json({ error: err.message });
+                stats.machineUtilization = row5.avgUtil ? Math.round(row5.avgUtil) : 71;
+
+                // Plan coverage
+                db.get(
+                  'SELECT COUNT(*) as total FROM plans WHERE week_start = ?',
+                  ['2026-07-14'],
+                  (err, row6) => {
+                    if (err) return res.status(500).json({ error: err.message });
+                    const totalRefs = stats.totalOperators + stats.totalMachines + stats.totalProjects;
+                    stats.planCoverage = totalRefs > 0 ? Math.round((row6.total / totalRefs) * 100) : 92;
+                    res.json(stats);
+                  }
+                );
+              }
+            );
+          }
+        );
       });
-    }
-    this.broadcastState();
-    return true;
-  }
-
-  async selectCardNumber(telegramId, username, ip, cardNumber) {
-    if (this.status !== 'lobby') throw new Error('Game already started or ended');
-    if (!this.pendingPlayers.has(telegramId)) {
-      throw new Error('You must join the room first');
-    }
-    if (this.players.find(p => p.telegramId === telegramId)) {
-      throw new Error('You already selected a card');
-    }
-    const user = await loadUser(telegramId, username);
-    if (user.balance < this.entryFee) {
-      throw new Error(`Insufficient balance. Need ${this.entryFee} ETB.`);
-    }
-    user.balance -= this.entryFee;
-    await supabase.from('users').update({ balance: user.balance }).eq('telegram_id', telegramId);
-    users[telegramId].balance = user.balance;
-
-    const num = parseInt(cardNumber);
-    if (this.takenCardNumbers.has(num)) throw new Error('Card number already taken');
-    this.takenCardNumbers.add(num);
-    const card = this.cardSet[num-1];
-    const player = {
-      telegramId,
-      username,
-      card,
-      markedNumbers: [],
-      cardNumber: num,
-      ip
-    };
-    this.players.push(player);
-    this.pendingPlayers.delete(telegramId);
-    Audit.cardAssigned(this.getRoomId(), telegramId, ip, { cardId: num.toString(), grid: card, stake: this.stake });
-
-    const socket = await getSocketByUserId(telegramId);
-    if (socket) {
-      socket.emit('yourCard', card);
-      socket.emit('markedNumbers', []);
-      socket.emit('balanceUpdate', user.balance);
-    }
-    this.broadcastState();
-    return player;
-  }
-
-  async removePlayer(telegramId) {
-    if (this.pendingPlayers.has(telegramId)) {
-      this.pendingPlayers.delete(telegramId);
-    } else {
-      const idx = this.players.findIndex(p => p.telegramId === telegramId);
-      if (idx !== -1) {
-        const player = this.players[idx];
-        this.takenCardNumbers.delete(player.cardNumber);
-        this.players.splice(idx, 1);
-      }
-    }
-    const socket = await getSocketByUserId(telegramId);
-    if (socket) socket.leave(this.getRoomId());
-    this.broadcastState();
-  }
-
-  async changeCardNumber(telegramId, newCardNumber) {
-    if (this.status !== 'lobby') throw new Error('Cannot change card after game starts');
-    const player = this.players.find(p => p.telegramId === telegramId);
-    if (!player) throw new Error('You have not selected a card yet');
-    if (this.takenCardNumbers.has(newCardNumber)) throw new Error('Card number taken');
-    this.takenCardNumbers.delete(player.cardNumber);
-    player.cardNumber = newCardNumber;
-    this.takenCardNumbers.add(newCardNumber);
-    player.card = this.cardSet[newCardNumber-1];
-    player.markedNumbers = [];
-    const socket = await getSocketByUserId(telegramId);
-    if (socket) {
-      socket.emit('yourCard', player.card);
-      socket.emit('markedNumbers', player.markedNumbers);
-    }
-    this.broadcastState();
-  }
-
-  async startGame() {
-    if (this.status !== 'lobby') return;
-    this.pendingPlayers.clear();
-    if (this.players.length === 0) {
-      this.resetGame();
-      return;
-    }
-    this.status = 'running';
-    this.prizePool = Math.floor(0.8 * (this.entryFee * this.players.length));
-    this.calledNumbers = [];
-    this.winningNumber = null;
-    this.winners = [];
-    this.broadcastState();
-    this.io.to(this.getRoomId()).emit('gameStarted', {
-      prizePool: this.prizePool,
-      playersCount: this.players.length
     });
-    this.startCalling();
+  });
+});
+
+// ─── 14. Generate demo data for current week ────────────────
+app.post('/api/generate-demo-week', (req, res) => {
+  const { week_start, week_end } = req.body;
+  if (!week_start || !week_end) {
+    return res.status(400).json({ error: 'week_start and week_end required' });
   }
 
-  startCalling() {
-    if (this.callInterval) clearInterval(this.callInterval);
-    this.callInterval = setInterval(() => {
-      if (this.status !== 'running') {
-        clearInterval(this.callInterval);
-        return;
-      }
-      const allNums = Array.from({ length: 75 }, (_, i) => i+1);
-      const available = allNums.filter(n => !this.calledNumbers.includes(n));
-      if (available.length === 0) {
-        clearInterval(this.callInterval);
-        this.endGameWithWinners();
-        return;
-      }
-      const number = available[Math.floor(Math.random() * available.length)];
-      this.calledNumbers.push(number);
-      this.io.to(this.getRoomId()).emit('numberCalled', { number, calledNumbers: this.calledNumbers });
-      Audit.numberDrawn(this.getRoomId(), { drawnNumber: number, drawIndex: this.calledNumbers.length, stake: this.stake });
-    }, 4000);
-  }
+  // Get all operators
+  db.all('SELECT operator_id, shop_id FROM operators', (err, ops) => {
+    if (err) return res.status(500).json({ error: err.message });
 
-  getLines(card) {
-    const lines = [];
-    for (let r=0; r<5; r++) lines.push([card[r][0], card[r][1], card[r][2], card[r][3], card[r][4]]);
-    for (let c=0; c<5; c++) lines.push([card[0][c], card[1][c], card[2][c], card[3][c], card[4][c]]);
-    lines.push([card[0][0], card[1][1], card[2][2], card[3][3], card[4][4]]);
-    lines.push([card[0][4], card[1][3], card[2][2], card[3][1], card[4][0]]);
-    lines.push([card[0][0], card[0][4], card[4][0], card[4][4]]);
-    return lines;
-  }
+    // Get all projects
+    db.all('SELECT project_id FROM projects', (err, projs) => {
+      if (err) return res.status(500).json({ error: err.message });
 
-  isLineComplete(line, marked) {
-    return line.every(val => val === 'FREE' || marked.includes(val));
-  }
+      // Get all machines
+      db.all('SELECT machine_id FROM machines', (err, macs) => {
+        if (err) return res.status(500).json({ error: err.message });
 
-  isBingoValidOnLastCall(card, marked, lastCalled) {
-    if (lastCalled === null) return false;
-    const lines = this.getLines(card);
-    for (const line of lines) {
-      if (!this.isLineComplete(line, marked)) continue;
-      if (line.includes(lastCalled)) return true;
-    }
-    return false;
-  }
+        // Get all assembly parts
+        db.all('SELECT part_id FROM assembly_parts', (err, parts) => {
+          if (err) return res.status(500).json({ error: err.message });
 
-  async claimBingo(telegramId, username, ip) {
-    if (this.status !== 'running') return { success: false, message: 'Game not running' };
-    const player = this.players.find(p => p.telegramId === telegramId);
-    if (!player) return { success: false, message: 'Not in game' };
-    const lastCalled = this.calledNumbers.length > 0 ? this.calledNumbers[this.calledNumbers.length-1] : null;
-    if (lastCalled === null || !this.isBingoValidOnLastCall(player.card, player.markedNumbers, lastCalled)) {
-      Audit.bingoRejected(this.getRoomId(), telegramId, ip, { reason: 'invalid_bingo_call', lastCalled });
-      return { success: false, message: 'Invalid Bingo claim' };
-    }
-    if (this.winners.find(w => w.telegramId === telegramId)) return { success: false, message: 'Already claimed' };
-    if (this.winningNumber === null) this.winningNumber = lastCalled;
-    this.winners.push({ telegramId, username });
-    Audit.bingoCalled(this.getRoomId(), telegramId, ip, { cardId: player.cardNumber.toString(), cardGrid: player.card, calledNumber: lastCalled, stake: this.stake });
-    if (!this.bingoGraceTimeout && this.winners.length === 1) {
-      this.io.to(this.getRoomId()).emit('multipleBingoPossible', { message: 'Bingo claimed! Waiting for other potential winners...' });
-      this.bingoGraceTimeout = setTimeout(() => this.endGameWithWinners(), 3000);
-    }
-    return { success: true };
-  }
+          const stmtProd = db.prepare(`
+            INSERT INTO production_records (
+              operator_id, shop_id, week_start, week_end,
+              planned_part, planned_qty, planned_time,
+              actual_part, actual_qty, actual_time,
+              performance_pct, delay_reason,
+              sick_days, permission_days,
+              lack_materials, lack_tool_cutter, design_problem,
+              machine_breakdown, machine_sequence_issue,
+              over_capacity, machine_occupied, own_problem
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `);
 
-  async endGameWithWinners() {
-    if (this.status !== 'running') return;
-    this.status = 'ended';
-    if (this.callInterval) clearInterval(this.callInterval);
-    if (this.bingoGraceTimeout) clearTimeout(this.bingoGraceTimeout);
-    this.bingoGraceTimeout = null;
-    if (this.winners.length > 0) {
-      const prizeEach = Math.floor(this.prizePool / this.winners.length);
-      for (const w of this.winners) {
-        const user = users[w.telegramId];
-        if (user) {
-          user.balance += prizeEach;
-          await supabase.from('users').update({ balance: user.balance }).eq('telegram_id', w.telegramId);
-          const socket = await getSocketByUserId(w.telegramId);
-          if (socket) socket.emit('balanceUpdate', user.balance);
-          Audit.winPaidOut(this.getRoomId(), w.telegramId, null, {
-            amount: prizeEach,
-            currency: 'ETB',
-            totalPrizePool: this.prizePool,
-            totalWinners: this.winners.length,
-            stake: this.stake
+          const reasons = ['—', 'Sick', 'Material', 'Tool', 'Breakdown', 'Design', 'Permistion'];
+          ops.forEach(op => {
+            const plannedQty = rand(15, 70);
+            const actualQty = rand(10, 65);
+            const perf = Math.round((actualQty / plannedQty) * 100);
+            const r = reasons[rand(0, reasons.length - 1)];
+            stmtProd.run(
+              op.operator_id, op.shop_id, week_start, week_end,
+              'Part-' + String.fromCharCode(65 + rand(0, 7)), plannedQty, rand(2, 8),
+              'Part-' + String.fromCharCode(65 + rand(0, 7)), actualQty, rand(2, 8),
+              perf, r === '—' ? null : r,
+              r === 'Sick' ? rand(1, 3) : 0,
+              r === 'Permistion' ? rand(1, 2) : 0,
+              r === 'Material' ? 1 : 0,
+              r === 'Tool' ? 1 : 0,
+              r === 'Design' ? 1 : 0,
+              r === 'Breakdown' ? 1 : 0,
+              0, 0, 0, 0
+            );
           });
-          detectRapidWins(this.getRoomId(), w.telegramId, null);
-        }
-      }
-      const totalEntryFees = this.players.length * this.entryFee;
-      const houseProfit = totalEntryFees - this.prizePool;
-      await supabase.from('game_rounds').insert({
-        stake: this.stake,
-        total_entry_fees: totalEntryFees,
-        prize_pool: this.prizePool,
-        house_profit: houseProfit,
-        players_count: this.players.length,
-        winners_count: this.winners.length
-      });
-      const ipCounts = {};
-      this.winners.forEach(w => {
-        const player = this.players.find(p => p.telegramId === w.telegramId);
-        if (player && player.ip) ipCounts[player.ip] = (ipCounts[player.ip] || 0) + 1;
-      });
-      Object.entries(ipCounts).forEach(([ip, count]) => {
-        if (count >= 3) {
-          Audit.suspicious(this.getRoomId(), 'system', ip, {
-            detectionSource: 'multiple_winners_same_ip',
-            reason: `${count} winners from IP ${ip}`,
-            evidence: { winners: this.winners.map(w => w.telegramId) }
+          stmtProd.finalize();
+
+          // Project production
+          const stmtProj = db.prepare(`
+            INSERT INTO project_production (
+              project_id, week_start, week_end,
+              planned_qty, planned_time, actual_qty, actual_time,
+              performance_pct, upto_date_qty, upto_date_time, overall_perf_pct
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+          projs.forEach(p => {
+            const planned = rand(20, 90);
+            const actual = Math.round(planned * (0.6 + Math.random() * 0.4));
+            const perf = Math.round((actual / planned) * 100);
+            stmtProj.run(
+              p.project_id, week_start, week_end,
+              planned, rand(10, 40), actual, rand(8, 35),
+              perf, rand(50, 200), `${rand(1, 30)} days`, rand(70, 95)
+            );
           });
-        }
+          stmtProj.finalize();
+
+          // Machine time
+          const stmtMac = db.prepare(`
+            INSERT INTO machine_time_reg (
+              machine_id, week_start, week_end,
+              planned_time, actual_time, utilization_pct, remark
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          `);
+          macs.forEach(m => {
+            const planned = rand(20, 70);
+            const actual = Math.round(planned * (0.5 + Math.random() * 0.5));
+            const util = Math.round((actual / planned) * 100);
+            stmtMac.run(m.machine_id, week_start, week_end, planned, actual, util, '');
+          });
+          stmtMac.finalize();
+
+          // Assembly records
+          const stmtAsm = db.prepare(`
+            INSERT INTO assembly_records (
+              part_id, week_start, week_end,
+              assembling_planned, assembling_wip, assembling_completed,
+              polishing_planned, polishing_wip, polishing_completed,
+              painting_planned, painting_wip, painting_completed,
+              upto_date_qty, performance_pct
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+          parts.forEach(p => {
+            const asm = rand(55, 95);
+            const pol = rand(45, 90);
+            const pnt = rand(40, 85);
+            stmtAsm.run(
+              p.part_id, week_start, week_end,
+              asm, rand(10, 40), rand(30, 80),
+              pol, rand(10, 35), rand(25, 70),
+              pnt, rand(10, 30), rand(20, 65),
+              rand(10, 50), Math.round((asm + pol + pnt) / 3)
+            );
+          });
+          stmtAsm.finalize();
+
+          res.json({ message: `Demo data generated for ${week_start} - ${week_end}`, count: ops.length });
+        });
       });
-      const winnerNames = this.winners.map(w => w.username);
-      this.io.to(this.getRoomId()).emit('gameEnded', {
-        winner: winnerNames.length === 1 ? winnerNames[0] : `${winnerNames.length} winners`,
-        winners: winnerNames,
-        prizeEach,
-        totalPrize: this.prizePool,
-        winnerCount: this.winners.length,
-        winningNumber: this.winningNumber
-      });
-    } else {
-      this.io.to(this.getRoomId()).emit('gameEnded', { noWinner: true });
-    }
-    this.broadcastState();
-    setTimeout(() => this.resetGame(), 5000);
-  }
-
-  markNumber(telegramId, number) {
-    if (this.status !== 'running') return false;
-    const player = this.players.find(p => p.telegramId === telegramId);
-    if (!player) return false;
-    if (number !== 'FREE' && (typeof number !== 'number' || number < 1 || number > 75)) return false;
-    const flat = player.card.flat();
-    if (!flat.includes(number)) return false;
-    if (!this.calledNumbers.includes(number) && number !== 'FREE') return false;
-    if (player.markedNumbers.includes(number)) return false;
-    player.markedNumbers.push(number);
-    return true;
-  }
-}
-
-// ---------- User cache ----------
-const users = {};
-async function loadUser(telegramId, username) {
-  const id = String(telegramId);
-  if (users[id]) return users[id];
-  const { data } = await supabase.from('users').select('*').eq('telegram_id', id).maybeSingle();
-  if (data) {
-    users[id] = { id, username: data.username, balance: Number(data.balance) };
-  } else {
-    const newUser = { telegram_id: id, username: username || 'Player', balance: 10 };
-    await supabase.from('users').insert(newUser);
-    users[id] = { id, username: newUser.username, balance: 10 };
-  }
-  return users[id];
-}
-
-// ---------- Helper to get socket by user ID ----------
-async function getSocketByUserId(userId) {
-  const sockets = await io.fetchSockets();
-  return sockets.find(s => s.userId === userId);
-}
-
-// ---------- Telegram verification ----------
-function verifyTelegram(initData) {
-  const params = new URLSearchParams(initData);
-  const hash = params.get('hash');
-  params.delete('hash');
-  const dataCheckString = [...params.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([k, v]) => `${k}=${v}`)
-    .join('\n');
-  const secretKey = crypto.createHmac('sha256', 'WebAppData').update(process.env.TELEGRAM_BOT_TOKEN).digest();
-  const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-  return calculatedHash === hash;
-}
-
-// ---------- Express Endpoints ----------
-app.get('/api/deposit-accounts', (req, res) => {
-  res.json({
-    telebirr: process.env.ADMIN_PHONE || '0924839730',
-    cbebirr: process.env.CBE_ACCOUNT || '1000123456789',
-    mpesa: process.env.MPESA_ACCOUNT || '251912345678'
+    });
   });
 });
 
-app.get('/api/admin-phone', (req, res) => { res.json({ phone: process.env.ADMIN_PHONE || '0924839730' }); });
-app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
-app.get('/audit', (req, res) => res.sendFile(path.join(__dirname, 'audit.html')));
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-
-app.post('/api/telegram-miniapp-auth', async (req, res) => {
-  const { initData } = req.body;
-  if (!initData || !verifyTelegram(initData)) return res.status(403).json({ success: false });
-  const params = new URLSearchParams(initData);
-  const userData = JSON.parse(params.get('user'));
-  const id = String(userData.id);
-  const user = await loadUser(id, userData.first_name || userData.username);
-  req.session.userId = id;
-  req.session.save((err) => {
-    if (err) {
-      console.error('Session save error:', err);
-      return res.status(500).json({ success: false, error: 'Session save failed' });
-    }
-    res.json({ success: true, userId: id, username: user.username, balance: user.balance });
-  });
+// ─── Serve frontend ──────────────────────────────────────────
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.post('/admin/add-balance', async (req, res) => {
-  const { secret, telegramId, amount } = req.body;
-  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
-  const strId = String(telegramId);
-  const amt = Number(amount);
-  if (isNaN(amt) || amt <= 0) return res.status(400).json({ error: 'Invalid amount' });
-  const user = await loadUser(strId, 'unknown');
-  user.balance += amt;
-  await supabase.from('users').update({ balance: user.balance }).eq('telegram_id', strId);
-  Audit.adminAction('ADMIN_ADD_BALANCE', 'admin', req.ip, { targetUserId: strId, amount: amt, newBalance: user.balance });
-  const sockets = await io.fetchSockets();
-  const playerSocket = sockets.find(s => s.userId === strId);
-  if (playerSocket) playerSocket.emit('balanceUpdate', user.balance);
-  res.json({ success: true, newBalance: user.balance });
+// ─── Start server ────────────────────────────────────────────
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`📊 API endpoints:`);
+  console.log(`   GET  /api/shops`);
+  console.log(`   GET  /api/operators`);
+  console.log(`   GET  /api/machines`);
+  console.log(`   GET  /api/projects`);
+  console.log(`   GET  /api/assembly-parts`);
+  console.log(`   GET  /api/production-records`);
+  console.log(`   POST /api/production-records`);
+  console.log(`   GET  /api/project-production`);
+  console.log(`   POST /api/project-production`);
+  console.log(`   GET  /api/machine-time`);
+  console.log(`   POST /api/machine-time`);
+  console.log(`   GET  /api/assembly-records`);
+  console.log(`   POST /api/assembly-records`);
+  console.log(`   GET  /api/issues`);
+  console.log(`   POST /api/issues`);
+  console.log(`   GET  /api/plans`);
+  console.log(`   POST /api/plans`);
+  console.log(`   GET  /api/dashboard/stats`);
+  console.log(`   POST /api/generate-demo-week`);
 });
-
-app.post('/api/request-deposit', upload.single('proof'), async (req, res) => {
-  const userId = req.session?.userId;
-  if (!userId) return res.status(401).json({ error: 'Not logged in' });
-  const { phone, amount, payment_type } = req.body;
-  const file = req.file;
-  const amt = Number(amount);
-  if (isNaN(amt) || amt <= 0) return res.status(400).json({ error: 'Invalid amount' });
-  if (!file) return res.status(400).json({ error: 'Proof image required' });
-  if (!['telebirr', 'cbebirr', 'mpesa'].includes(payment_type)) return res.status(400).json({ error: 'Invalid payment type' });
-  const user = await loadUser(userId, null);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  const proofPath = `/uploads/${file.filename}`;
-  const { data, error } = await supabase.from('deposit_requests').insert({
-    telegram_id: userId, username: user.username, amount: amt, status: 'pending',
-    phone: phone || null, payment_type, proof_path: proofPath
-  }).select().single();
-  if (error) { console.error('Deposit insert error:', error.message); return res.status(500).json({ error: 'Internal error' }); }
-  Audit.depositInitiated(userId, req.ip, { transactionId: data.id.toString(), amount: amt, currency: 'ETB', method: payment_type });
-  res.json({ success: true, requestId: data.id, message: `Deposit request of ${amt} ETB via ${payment_type} submitted.` });
-});
-
-app.get('/admin/deposits', async (req, res) => {
-  const { secret } = req.query;
-  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
-  const { data, error } = await supabase.from('deposit_requests').select('*').eq('status', 'pending').order('created_at', { ascending: true });
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ requests: data });
-});
-
-app.post('/admin/process-deposit', async (req, res) => {
-  const { secret, requestId, action } = req.body;
-  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
-  if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
-  const { data: reqData, error: fetchErr } = await supabase.from('deposit_requests').select('*').eq('id', requestId).single();
-  if (fetchErr || !reqData) return res.status(404).json({ error: 'Request not found' });
-  if (reqData.status !== 'pending') return res.status(400).json({ error: 'Already processed' });
-  if (action === 'approve') {
-    const user = await loadUser(reqData.telegram_id, null);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    user.balance += reqData.amount;
-    await supabase.from('users').update({ balance: user.balance }).eq('telegram_id', reqData.telegram_id);
-    await supabase.from('deposit_requests').update({ status: 'approved', processed_at: new Date().toISOString() }).eq('id', requestId);
-    Audit.depositCompleted(reqData.telegram_id, req.ip, { transactionId: requestId.toString(), providerRef: reqData.id.toString(), amount: reqData.amount, currency: 'ETB', method: reqData.payment_type || 'unknown' });
-    const sockets = await io.fetchSockets();
-    const playerSocket = sockets.find(s => s.userId === reqData.telegram_id);
-    if (playerSocket) { playerSocket.emit('balanceUpdate', user.balance); playerSocket.emit('depositStatus', { status: 'approved', amount: reqData.amount }); }
-    res.json({ success: true, newBalance: user.balance });
-  } else {
-    await supabase.from('deposit_requests').update({ status: 'rejected', processed_at: new Date().toISOString() }).eq('id', requestId);
-    Audit.depositFailed(reqData.telegram_id, req.ip, { transactionId: requestId.toString(), amount: reqData.amount, reason: 'rejected_by_admin' });
-    const sockets = await io.fetchSockets();
-    const playerSocket = sockets.find(s => s.userId === reqData.telegram_id);
-    if (playerSocket) playerSocket.emit('depositStatus', { status: 'rejected', amount: reqData.amount });
-    res.json({ success: true });
-  }
-});
-
-app.post('/api/request-withdraw', async (req, res) => {
-  const userId = req.session?.userId;
-  if (!userId) return res.status(401).json({ error: 'Not logged in' });
-  const { amount, phone, withdrawal_type, name } = req.body;
-  const amt = Number(amount);
-  if (isNaN(amt) || amt <= 0) return res.status(400).json({ error: 'Invalid amount' });
-  if (!['telebirr', 'cbebirr', 'mpesa'].includes(withdrawal_type)) return res.status(400).json({ error: 'Invalid withdrawal type' });
-  const receiver = (phone || '').trim();
-  if (!receiver || receiver.length < 10) return res.status(400).json({ error: 'Valid receiver phone/account required' });
-  const receiverName = (name || '').trim();
-  if (!receiverName) return res.status(400).json({ error: 'Account holder name is required' });
-  const user = await loadUser(userId, null);
-  if (!user || user.balance < amt) return res.status(400).json({ error: 'Insufficient balance' });
-  const { data, error } = await supabase.from('withdrawal_requests').insert({
-    telegram_id: userId, username: user.username, amount: amt, status: 'pending',
-    phone_number: receiver, withdrawal_type, receiver_name: receiverName
-  }).select().single();
-  if (error) { console.error('Withdraw insert error:', error.message); return res.status(500).json({ error: 'Internal error' }); }
-  Audit.withdrawalRequested(userId, req.ip, { transactionId: data.id.toString(), amount: amt, currency: 'ETB', method: withdrawal_type, receiver, name: receiverName });
-  res.json({ success: true, requestId: data.id, message: `Withdrawal request of ${amt} ETB via ${withdrawal_type} to ${receiver} submitted.` });
-});
-
-app.get('/admin/withdrawals', async (req, res) => {
-  const { secret } = req.query;
-  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
-  const { data, error } = await supabase.from('withdrawal_requests').select('*').eq('status', 'pending').order('created_at', { ascending: true });
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ requests: data });
-});
-
-app.post('/admin/process-withdrawal', async (req, res) => {
-  const { secret, requestId, action } = req.body;
-  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
-  if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
-  const { data: reqData, error: fetchErr } = await supabase.from('withdrawal_requests').select('*').eq('id', requestId).single();
-  if (fetchErr || !reqData) return res.status(404).json({ error: 'Request not found' });
-  if (reqData.status !== 'pending') return res.status(400).json({ error: 'Already processed' });
-  if (action === 'approve') {
-    const user = await loadUser(reqData.telegram_id, null);
-    if (!user || user.balance < reqData.amount) return res.status(400).json({ error: 'Insufficient balance now' });
-    user.balance -= reqData.amount;
-    await supabase.from('users').update({ balance: user.balance }).eq('telegram_id', reqData.telegram_id);
-    await supabase.from('withdrawal_requests').update({ status: 'approved', processed_at: new Date().toISOString() }).eq('id', requestId);
-    Audit.withdrawalCompleted(reqData.telegram_id, req.ip, { transactionId: requestId.toString(), amount: reqData.amount, currency: 'ETB', method: reqData.withdrawal_type || 'N/A', receiver: reqData.phone_number });
-    const sockets = await io.fetchSockets();
-    const playerSocket = sockets.find(s => s.userId === reqData.telegram_id);
-    if (playerSocket) { playerSocket.emit('balanceUpdate', user.balance); playerSocket.emit('withdrawStatus', { status: 'approved', amount: reqData.amount, phone: reqData.phone_number }); }
-    res.json({ success: true, newBalance: user.balance });
-  } else {
-    await supabase.from('withdrawal_requests').update({ status: 'rejected', processed_at: new Date().toISOString() }).eq('id', requestId);
-    Audit.withdrawalRejected(reqData.telegram_id, req.ip, { transactionId: requestId.toString(), amount: reqData.amount, reason: 'rejected_by_admin' });
-    const sockets = await io.fetchSockets();
-    const playerSocket = sockets.find(s => s.userId === reqData.telegram_id);
-    if (playerSocket) playerSocket.emit('withdrawStatus', { status: 'rejected', amount: reqData.amount });
-    res.json({ success: true });
-  }
-});
-
-app.get('/admin/audit', async (req, res) => {
-  const { secret } = req.query;
-  if (secret !== process.env.AUDITOR_SECRET) return res.status(403).json({ success: false, error: 'Forbidden' });
-  const { roomId, userId, eventType, from, to, limit = 200 } = req.query;
-  let query = supabase.from('audit_logs').select('*', { count: 'exact' });
-  if (roomId) query = query.eq('room_id', roomId);
-  if (userId) query = query.eq('user_id', userId);
-  if (eventType) query = query.eq('event_type', eventType);
-  if (from) query = query.gte('timestamp', from);
-  if (to) query = query.lte('timestamp', to);
-  query = query.order('timestamp', { ascending: false }).limit(Math.min(parseInt(limit), 1000));
-  const { data, error, count } = await query;
-  if (error) return res.status(500).json({ success: false, error: error.message });
-  res.json({ success: true, logs: data, count });
-});
-
-app.get('/admin/audit-summary', async (req, res) => {
-  const { secret } = req.query;
-  if (secret !== process.env.AUDITOR_SECRET) return res.status(403).json({ success: false, error: 'Forbidden' });
-  try {
-    const { data: deposits, error: depErr } = await supabase.from('deposit_requests').select('amount').eq('status', 'approved');
-    if (depErr) throw depErr;
-    const { data: withdrawals, error: wdErr } = await supabase.from('withdrawal_requests').select('amount').eq('status', 'approved');
-    if (wdErr) throw wdErr;
-    const { data: rounds, error: rdErr } = await supabase.from('game_rounds').select('house_profit');
-    if (rdErr) throw rdErr;
-    const totalDeposits = deposits.reduce((sum, r) => sum + Number(r.amount), 0);
-    const totalWithdrawals = withdrawals.reduce((sum, r) => sum + Number(r.amount), 0);
-    const totalHouseProfit = rounds.reduce((sum, r) => sum + Number(r.house_profit), 0);
-    res.json({ success: true, totalDeposits, totalWithdrawals, totalHouseProfit });
-  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
-});
-
-// ---------- Socket.IO ----------
-const rooms = {
-  10: new GameRoom(10, io),
-  20: new GameRoom(20, io),
-  30: new GameRoom(30, io)
-};
-
-const userActiveRoom = new Map();
-
-io.use((socket, next) => {
-  if (!socket.request.session?.userId) return next(new Error('Unauthorized'));
-  socket.userId = socket.request.session.userId;
-  socket.username = users[socket.userId]?.username || 'Player';
-  next();
-});
-
-io.on('connection', async (socket) => {
-  socket.emit('roomStates', GameRoom.getAllRoomsPublicState(rooms));
-  socket.emit('balanceUpdate', users[socket.userId]?.balance || 0);
-
-  const previousStake = userActiveRoom.get(socket.userId);
-  if (previousStake && rooms[previousStake]) {
-    const room = rooms[previousStake];
-    const player = room.players.find(p => p.telegramId === socket.userId);
-    if (player) {
-      socket.join(room.getRoomId());
-      socket.emit('joinedRoom', {
-        stake: room.stake,
-        card: player.card,
-        markedNumbers: player.markedNumbers,
-        roomState: room.getPublicState(),
-        calledNumbers: room.calledNumbers
-      });
-    } else if (room.pendingPlayers.has(socket.userId)) {
-      socket.join(room.getRoomId());
-      socket.emit('joinedRoom', {
-        stake: room.stake,
-        roomState: room.getPublicState(),
-        calledNumbers: room.calledNumbers
-      });
-    } else {
-      userActiveRoom.delete(socket.userId);
-    }
-  }
-
-  socket.on('selectStake', async ({ stake, preferredCardNumber }, callback) => {
-    try {
-      const stakeNum = parseInt(stake);
-      if (![10,20,30].includes(stakeNum)) throw new Error('Invalid stake');
-      const room = rooms[stakeNum];
-      if (!room) throw new Error('Room not found');
-      if (userActiveRoom.has(socket.userId)) {
-        const currentStake = userActiveRoom.get(socket.userId);
-        if (currentStake === stakeNum) throw new Error('Already in this room');
-        else throw new Error('Already in another room. Leave first.');
-      }
-      const ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
-      await room.addPendingPlayer(socket.userId, socket.username, ip);
-      userActiveRoom.set(socket.userId, stakeNum);
-      if (callback) callback({ success: true });
-    } catch (err) {
-      if (callback) callback({ success: false, error: err.message });
-      else socket.emit('error', err.message);
-    }
-  });
-
-  socket.on('leaveRoom', async (callback) => {
-    const stake = userActiveRoom.get(socket.userId);
-    if (stake && rooms[stake]) {
-      await rooms[stake].removePlayer(socket.userId);
-      userActiveRoom.delete(socket.userId);
-      socket.leave(rooms[stake].getRoomId());
-      if (callback) callback({ success: true });
-    } else {
-      if (callback) callback({ success: false, error: 'Not in any room' });
-    }
-  });
-
-  socket.on('selectCardNumber', async ({ stake, cardNumber }, callback) => {
-    const stakeNum = parseInt(stake);
-    if (![10,20,30].includes(stakeNum)) return callback({ success: false, error: 'Invalid stake' });
-    const room = rooms[stakeNum];
-    if (!room) return callback({ success: false, error: 'Room not found' });
-    if (userActiveRoom.get(socket.userId) !== stakeNum) return callback({ success: false, error: 'Not in this room' });
-    try {
-      const ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
-      const player = await room.selectCardNumber(socket.userId, socket.username, ip, cardNumber);
-      callback({ success: true, player: { card: player.card, markedNumbers: player.markedNumbers } });
-    } catch (err) {
-      callback({ success: false, error: err.message });
-    }
-  });
-
-  socket.on('markNumber', ({ stake, number }) => {
-    const stakeNum = parseInt(stake);
-    if (![10,20,30].includes(stakeNum)) return;
-    const room = rooms[stakeNum];
-    if (room && userActiveRoom.get(socket.userId) === stakeNum) {
-      if (room.markNumber(socket.userId, number)) {
-        const player = room.players.find(p => p.telegramId === socket.userId);
-        if (player) {
-          room.io.to(room.getRoomId()).emit('markedNumbers', player.markedNumbers);
-        }
-      }
-    }
-  });
-
-  socket.on('claimBingo', async ({ stake }, callback) => {
-    const stakeNum = parseInt(stake);
-    if (![10,20,30].includes(stakeNum)) return callback({ success: false, error: 'Invalid stake' });
-    const room = rooms[stakeNum];
-    if (!room) return callback({ success: false, error: 'Room not found' });
-    if (userActiveRoom.get(socket.userId) !== stakeNum) return callback({ success: false, error: 'Not in this room' });
-    const ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
-    const result = await room.claimBingo(socket.userId, socket.username, ip);
-    callback(result);
-  });
-
-  socket.on('getBalance', async () => {
-    const u = await loadUser(socket.userId, socket.username);
-    socket.emit('balanceUpdate', u.balance);
-  });
-
-  socket.on('disconnect', () => {});
-});
-
-setInterval(() => {
-  const allStates = GameRoom.getAllRoomsPublicState(rooms);
-  io.emit('roomStates', allStates);
-}, 2000);
-
-app.use((err, req, res, next) => { console.error('Unhandled error:', err.message); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => console.log(`✅ Bingo server with 3 stake rooms on port ${PORT}`));
